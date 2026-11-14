@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <link rel="icon" href="data:,">
+  <title>27. WebAR en pantalla completa</title>
+  <style>
+    /* Evita que un arrastre en el visor desplace o recargue la página. */
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:#102231;color:white;font:16px system-ui}
+    p{padding:12px}
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <!-- El SDK abre el modal central. Durante la sesión, Sesión vuelve a mostrarlo. -->
+  <!-- media-menu permite ajustar la cámara, hacer una foto o grabar con micrófono. -->
+  <webar-scene fullscreen-view media-menu gestures diagnostics>
+    <p role="status">Cargando el visor. Abre esta página mediante HTTPS en el teléfono.</p>
+    <webar-target src="../assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model src="../assets/robot.glb" size="0.20"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <p class="example-documentation" data-doc-en="declarative.html#camera-and-media-controls"><a href="../../docs/declarative.html#camara-captura-y-pantalla-completa">Cómo desarrollar este ejemplo</a></p>
+  <script>
+    addEventListener('DOMContentLoaded',()=>{
+      const dialog=document.querySelector('webar-scene').shadowRoot?.querySelector('dialog');
+      if(dialog)dialog.append(document.querySelector('.example-documentation'));
+    });
+  </script>
+</body>
+</html>

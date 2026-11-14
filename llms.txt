@@ -1,0 +1,97 @@
+# WebAR Fácil 0.1.0-alpha.6
+
+> Biblioteca WebAR TypeScript open-source. Imágenes en escritorio/móvil, WebXR y odometría local. Índice del contrato implementado.
+
+Empieza por docs/ai-guide.md y docs/getting-started.md. No usar docs/archive como API.
+
+## Documentación
+
+- [Manual de WebAR Fácil](docs/README.md)
+- [Tu primera aplicación con HTML](docs/getting-started.md)
+- [Reconocimiento de celulares](docs/phone-detection.md)
+- [Aplicaciones con HTML declarativo](docs/declarative.md)
+- [Vídeo, gestos, animaciones y contenido en vivo](docs/interaction.md)
+- [Marcadores y compilación](docs/image-targets.md)
+- [Modelos GLB y animaciones](docs/models.md)
+- [Varios marcadores](docs/multiple-targets.md)
+- [Eventos, continuidad y diagnóstico](docs/events.md)
+- [Recetas con HTML declarativo](docs/recipes.md)
+- [Seguimiento espacial: WebXR y fallback](docs/spatial-tracking.md)
+- [Guía visual y confirmación de colocación](docs/placement.md)
+- [Diagnóstico local para iPhone y Android](docs/diagnostics.md)
+- [Validación de odometría, relocalización y deriva](docs/odometry-validation.md)
+- [Instalación y distribución](docs/installation.md)
+- [Identificación y distribución local](docs/local-release.md)
+- [Preparar la alfa pública](docs/alpha-release.md)
+- [Cámara, foco y rendimiento](docs/camera-performance.md)
+- [Despliegue y seguridad del navegador](docs/deployment.md)
+- [Problemas frecuentes](docs/troubleshooting.md)
+- [Conceptos y coordenadas](docs/concepts.md)
+- [Integración programática avanzada](docs/programmatic.md)
+- [Recetas programáticas avanzadas](docs/recipes-programmatic.md)
+- [Vídeo MP4 y chroma key](docs/video.md)
+- [Integración con Three.js](docs/threejs.md)
+- [Integración con A-Frame](docs/aframe.md)
+- [Persistencia de mapas locales](docs/maps.md)
+- [WebAREngine](docs/api-engine.md)
+- [API pública generada](docs/api-generated.md)
+- [API avanzada y extensiones](docs/advanced.md)
+- [Arquitectura implementada](docs/architecture.md)
+- [Desarrollo, pruebas y contribuciones](docs/contributing.md)
+- [Verificación de la implementación](docs/verification.md)
+- [Aceptación en dispositivos físicos](docs/device-validation.md)
+- [Contrato para asistentes de IA](docs/ai-guide.md)
+- [Glosario](docs/glossary.md)
+
+## English documentation
+
+- [WebAR Fácil documentation](docs/en/README.md)
+- [Your first HTML application](docs/en/getting-started.md)
+- [Phone recognition](docs/en/phone-detection.md)
+- [Applications with declarative HTML](docs/en/declarative.md)
+- [Video, gestures, animation and live content](docs/en/interaction.md)
+- [Image markers and compilation](docs/en/image-targets.md)
+- [GLB models and animations](docs/en/models.md)
+- [Multiple image markers](docs/en/multiple-targets.md)
+- [Events, tracking continuity and diagnostics](docs/en/events.md)
+- [Declarative HTML recipes](docs/en/recipes.md)
+- [Spatial tracking with WebXR and optical fallback](docs/en/spatial-tracking.md)
+- [Visual guidance and placement confirmation](docs/en/placement.md)
+- [Local diagnostics for iPhone and Android](docs/en/diagnostics.md)
+- [Validating odometry, relocalization and drift](docs/en/odometry-validation.md)
+- [Installation and distribution](docs/en/installation.md)
+- [Identifying and serving a local build](docs/en/local-release.md)
+- [Preparing the public alpha](docs/en/alpha-release.md)
+- [Camera, focus and performance](docs/en/camera-performance.md)
+- [Deployment and browser security](docs/en/deployment.md)
+- [Troubleshooting](docs/en/troubleshooting.md)
+- [Concepts and coordinate systems](docs/en/concepts.md)
+- [Advanced programmatic integration](docs/en/programmatic.md)
+- [Advanced programmatic recipes](docs/en/recipes-programmatic.md)
+- [MP4 video and chroma key](docs/en/video.md)
+- [Three.js integration](docs/en/threejs.md)
+- [A-Frame integration](docs/en/aframe.md)
+- [Persisting local optical maps](docs/en/maps.md)
+- [WebAREngine](docs/en/api-engine.md)
+- [Generated public API](docs/en/api-generated.md)
+- [Advanced API and extensions](docs/en/advanced.md)
+- [Implemented architecture](docs/en/architecture.md)
+- [Development, tests and contributions](docs/en/contributing.md)
+- [Implementation verification](docs/en/verification.md)
+- [Acceptance on physical devices](docs/en/device-validation.md)
+- [Integration contract for AI assistants](docs/en/ai-guide.md)
+- [Glossary](docs/en/glossary.md)
+
+## Contrato estructurado
+
+- [API JSON](docs/api.json)
+- [Manual completo](llms-full.txt)
+
+
+## Autoría / Credits
+
+**Creador / Creator:** IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+
+- [Web](https://realidad-aumentada.com.co)
+- [Blog](https://blog.realidad-aumentada.com.co)
+- [YouTube](https://www.youtube.com/@carlosreinamcr)

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <link rel="icon" href="data:,">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>WebAR · Imagen y superficies</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#101b25;color:#fff8e8;font:16px system-ui,sans-serif}
+    #stage{position:fixed;inset:0;margin:auto}#stage video,#stage canvas{position:absolute;inset:0;width:100%;height:100%}
+    #overlay{position:fixed;inset:0;pointer-events:none}header{padding:max(12px,env(safe-area-inset-top)) 16px 12px;background:#101b25ec;max-height:32vh;overflow:auto;pointer-events:auto}
+    button,input,select{font:inherit;padding:9px;margin:4px;max-width:100%}button{cursor:pointer}button:disabled{opacity:.45;cursor:default}
+    h1{font-size:19px;margin:0 0 8px}p{margin:8px 4px;max-width:85ch}a{color:#8de8d4}small,#metrics{font-size:12px;color:#c5d5dd}details{margin:6px 4px}label{display:block;font-size:14px}
+    #print{position:fixed;right:12px;bottom:12px;background:#101b25e8;padding:10px;border-radius:6px;pointer-events:auto;font-size:12px;max-width:44vw}
+    #open-options{position:fixed;left:12px;bottom:12px;margin:0;padding:10px;font-size:12px;max-width:44vw;pointer-events:auto}
+  </style>
+  <!-- Three.js se sirve localmente. Puede sustituirse por un CDN en el ejemplo. -->
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
+</head>
+<body>
+  <main id="stage" aria-label="Cámara con contenido aumentado" data-tracked="false"></main>
+  <div id="overlay"><header>
+    <h1>WebAR · Reconocimiento de imágenes</h1>
+    <p>Carga una imagen, inicia la cámara y enfoca el marcador. No necesitas calibrar la cámara.</p>
+    <label>Imagen del marcador <input id="target" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg"></label>
+    <label><input id="keep-visible" type="checkbox" checked> Mantener contenido visible si se pierde el marcador</label>
+    <p id="target-info">Sin imagen seleccionada se utiliza el marcador de ejemplo.</p>
+    <button id="start" disabled>Iniciar cámara</button><button id="slam" disabled>Activar SLAM</button><button id="stop" disabled>Detener</button>
+    <p id="status" role="status" aria-live="polite">Cargando librería local…</p>
+    <p id="metrics">La frecuencia del renderizado y la del tracking se miden por separado.</p>
+    <p id="quality" role="status"></p>
+    <details><summary>Opciones avanzadas y exportación</summary>
+      <label>Modelo 3D opcional <input id="model" type="file" accept=".glb,model/gltf-binary"></label>
+      <label>Vídeo MP4 opcional <input id="video-file" type="file" accept="video/mp4,.mp4"></label>
+      <label>Contenido <select id="content-mode"><option value="cube">Cubo</option><option value="glb">Modelo GLB</option><option value="video">Vídeo</option></select></label>
+      <p id="model-info" role="status">Sin modelo seleccionado se muestra el cubo. Admite GLB, Draco y Meshopt.</p>
+      <p id="video-info" role="status"></p>
+      <button id="video-play" disabled>Reproducir vídeo</button><button id="video-pause" disabled>Pausar vídeo</button>
+      <label>Cámara <select id="camera"><option value="">Automática (webcam o trasera disponible)</option></select></label>
+      <label>Tolerancia de pérdida (ms) <input id="loss-tolerance" type="number" min="0" max="10000" value="500"></label>
+      <label>Suavizado de pose (ms) <input id="pose-smoothing" type="number" min="0" max="500" value="65"></label>
+      <label><input id="chroma-enabled" type="checkbox"> Quitar fondo del vídeo (chroma key)</label>
+      <label>Color de fondo <input id="chroma-color" type="color" value="#00ff00"></label>
+      <label>Tolerancia chroma <input id="chroma-similarity" type="range" min="0" max="0.8" step="0.01" value="0.12"></label>
+      <label>Tamaño del modelo <input id="model-scale" type="range" min="0.1" max="5" step="0.1" value="1"></label>
+      <label>Animación <select id="animation" disabled><option value="">Sin animaciones</option></select></label>
+      <label>Escala de referencia opcional (cm) <input id="target-width" type="number" min="1" max="10000" step="0.1" value="20"></label>
+      <p>Los descriptores y metadatos se generan automáticamente al iniciar. Exportación opcional:
+        <a id="download-dat" hidden>Descargar .dat</a> <a id="download-json" hidden>Descargar JSON</a></p>
+      <label>Backend de superficies <select id="backend"><option value="auto">Automático: WebXR → visión local</option><option value="optical-flow">Visión local (WASM)</option><option value="webxr">Solo WebXR</option></select></label>
+      <label>Colocación <select id="placement"><option value="auto">Automática desde el marcador, si es posible</option><option value="preserve">Conservar posición: exigir alineación</option><option value="hit-test">Colocar sobre una nueva superficie</option></select></label>
+      <small>La escala solo ajusta el tamaño del contenido. El seguimiento de imágenes funciona sin WebXR ni archivos de calibración. El seguimiento de superficies es un modo adicional: para pasar a visión local, mantén el marcador quieto y mueve lentamente la cámara sobre un entorno con textura.</small>
+    </details>
+  </header><button id="open-options">GLB / MP4 / ajustes</button><a id="print" href="../marker.png" target="_blank" rel="noopener">Abrir marcador de ejemplo</a></div>
+  <script type="module">
+    import * as THREE from 'three';
+    const $=selector=>document.querySelector(selector),status=$('#status'),stage=$('#stage'),overlay=$('#overlay');
+    const startButton=$('#start'),slamButton=$('#slam'),stopButton=$('#stop');
+    const details=$('details');
+    $('#open-options').onclick=()=>{details.open=!details.open;if(details.open)$('summary').scrollIntoView({block:'start'});};
+    details.addEventListener('toggle',()=>{$('#open-options').textContent=details.open?'Cerrar ajustes':'GLB / MP4 / ajustes';if(!details.open)$('header').scrollTop=0;});
+    const showError=error=>{status.textContent=error.message||String(error);console.error(error);};
+    let engine=null,background=null,lastProjection=null,lastPose=null,contextLost=false;
+    let exportURLs=[];
+    const clearExports=()=>{exportURLs.forEach(url=>URL.revokeObjectURL(url));exportURLs=[];
+      for(const id of ['download-dat','download-json']){$('#'+id).hidden=true;$('#'+id).removeAttribute('href');}};
+    $('#target').onchange=()=>{clearExports();$('#target-info').textContent=$('#target').files[0]?'La imagen se compilará automáticamente al iniciar la cámara.':'Se utilizará el marcador de ejemplo.';};
+    const listCameras=async()=>{
+      if(!navigator.mediaDevices?.enumerateDevices)return;
+      try{const select=$('#camera'),selected=select.value;
+        const devices=(await navigator.mediaDevices.enumerateDevices()).filter(device=>device.kind==='videoinput'&&device.deviceId);
+        select.replaceChildren(new Option('Automática (webcam o trasera disponible)',''));
+        devices.forEach((device,i)=>select.add(new Option(device.label||`Cámara ${i+1}`,device.deviceId)));
+        if([...select.options].some(option=>option.value===selected))select.value=selected;
+      }catch(error){console.warn('No se pudo listar cámaras',error);}
+    };
+    const controls=(running,busy=false)=>{
+      startButton.disabled=running||busy||contextLost;slamButton.disabled=!running||busy||contextLost;stopButton.disabled=!running&&!busy;
+      for(const id of ['target','target-width','camera','loss-tolerance','pose-smoothing'])$('#'+id).disabled=running||busy;
+    };
+    try {
+      // 1. El IIFE usa el peer THREE global y expone window.WebARFacil.
+      window.THREE=THREE;
+      await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='../dist/webar-facil.browser.min.js';script.onload=resolve;
+        script.onerror=()=>reject(new Error('Ejecuta npm run build antes de abrir el ejemplo.'));document.head.append(script);});
+      const {WebAREngine,ThreeARGroup,ThreeCameraBackground,ThreeARModel,ThreeARVideo}=window.WebARFacil;
+
+      // 2. Escena de Three.js; el fondo de vídeo rectifica distorsión en GPU.
+      const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+      renderer.xr.enabled=true;renderer.xr.setReferenceSpaceType('local');stage.append(renderer.domElement);
+      const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(60,1,.01,1000);camera.matrixAutoUpdate=false;
+      const group=new ThreeARGroup(),geometry=new THREE.BoxGeometry(.08,.08,.08),material=new THREE.MeshNormalMaterial();
+      const cube=new THREE.Mesh(geometry,material);cube.position.y=.04;group.add(cube);scene.add(group);
+      const model=new ThreeARModel({dracoDecoderPath:new URL('../decoders/draco/',location.href)});group.add(model);let modelGeneration=0;
+      const video=new ThreeARVideo();video.visible=false;group.add(video);let videoGeneration=0;
+      const selectContent=()=>{
+        const mode=$('#content-mode').value;cube.visible=mode==='cube';model.visible=mode==='glb';video.visible=mode==='video';
+        stage.dataset.content=mode;if(mode!=='video')video.pause();
+      };
+      $('#content-mode').onchange=selectContent;
+      const updateChroma=()=>video.setChromaKey($('#chroma-enabled').checked?{color:$('#chroma-color').value,similarity:Number($('#chroma-similarity').value)}:false);
+      for(const id of ['chroma-enabled','chroma-color','chroma-similarity'])$('#'+id).oninput=updateChroma;
+      $('#video-file').onchange=async event=>{
+        const generation=++videoGeneration,file=event.target.files[0];if(!file){video.pause();$('#video-play').disabled=true;$('#video-pause').disabled=true;$('#content-mode').value='cube';selectContent();return;}
+        $('#video-info').textContent='Cargando vídeo…';
+        try{await video.setSource(file);if(generation!==videoGeneration)return;$('#content-mode').value='video';selectContent();updateChroma();
+          $('#video-play').disabled=false;$('#video-pause').disabled=false;$('#video-info').textContent='Vídeo listo. Pulsa Reproducir.';
+        }catch(error){if(generation===videoGeneration)$('#video-info').textContent=error.message||String(error);}
+      };
+      $('#video-play').onclick=()=>video.play().then(()=>{$('#video-info').textContent='Reproduciendo';},error=>{$('#video-info').textContent=error.message;});
+      $('#video-pause').onclick=()=>{video.pause();$('#video-info').textContent='Vídeo pausado';};
+      $('#keep-visible').onchange=event=>engine?.setKeepContentOnLost(event.target.checked);
+      scene.add(new THREE.HemisphereLight(0xffffff,0x566070,2));
+      const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(1,2,1);scene.add(light);
+      $('#model').onchange=async event=>{
+        const generation=++modelGeneration,file=event.target.files[0];
+        if(!file){model.unload();$('#content-mode').value='cube';selectContent();$('#model-info').textContent='Mostrando cubo de ejemplo.';$('#animation').disabled=true;return;}
+        $('#model-info').textContent='Cargando modelo y decodificando geometría…';
+        try{await model.load(file);if(generation!==modelGeneration)return;
+          $('#content-mode').value='glb';selectContent();model.scale.setScalar(Number($('#model-scale').value));
+          const select=$('#animation');select.replaceChildren(new Option('Pausar animación',''));
+          model.animations.forEach((clip,index)=>select.add(new Option(clip.name||`Animación ${index+1}`,String(index))));
+          select.disabled=!model.animations.length;if(model.animations.length)select.value='0';
+          $('#model-info').textContent=`${file.name} listo · ${model.animations.length} animaciones`;
+        }catch(error){if(generation===modelGeneration)$('#model-info').textContent=error.message||String(error);}
+      };
+      $('#model-scale').oninput=event=>model.scale.setScalar(Number(event.target.value));
+      $('#animation').onchange=event=>{if(event.target.value==='')model.stopAnimations();else model.playAnimation(Number(event.target.value));};
+      const reticleGeometry=new THREE.RingGeometry(.06,.08,32).rotateX(-Math.PI/2),reticleMaterial=new THREE.MeshBasicMaterial({color:0x64e7ba,side:THREE.DoubleSide});
+      const reticle=new THREE.Mesh(reticleGeometry,reticleMaterial);reticle.matrixAutoUpdate=false;reticle.visible=false;scene.add(reticle);
+      const hide=()=>{group.visible=false;reticle.visible=false;stage.dataset.tracked='false';};
+      const resize=()=>{
+        if(renderer.xr.isPresenting)return;
+        const video=engine?.videoElement,aspect=video?.videoWidth&&video.videoHeight?video.videoWidth/video.videoHeight:innerWidth/innerHeight;
+        const width=Math.min(innerWidth,innerHeight*aspect),height=width/aspect;
+        stage.style.width=width+'px';stage.style.height=height+'px';renderer.setSize(width,height);camera.aspect=aspect;
+        if(lastProjection){camera.projectionMatrix.fromArray(lastProjection);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}else camera.updateProjectionMatrix();
+      };
+      const clock=new THREE.Clock(),render=()=>{model.update(clock.getDelta());renderer.render(scene,camera);};
+      addEventListener('resize',resize);resize();renderer.setAnimationLoop(render);
+
+      // 3. La proyección se configura internamente a partir del vídeo capturado.
+      const messages={
+        'compiling-target':'Compilando imagen y metadatos en el Worker...',
+        'camera-ready':'Cámara activa. Cargando el marcador…','target-loaded':'Busca el marcador con la cámara.',
+        'not-found':'Marcador no visible. Acércate, mejora la luz o reduce el desenfoque.',
+        'tracking-uncertain':'Recuperando el marcador…',
+        'initializing-environment':'Mantén el marcador quieto y desplaza la cámara: construyendo mapa del entorno…',
+        'scan-floor':'Desplaza la cámara sobre una superficie con textura; hace falta paralaje.',
+        'odometry-initializing':'Inicializando visión local. Mueve la cámara lateralmente, no solo la gires.',
+        'odometry-lost':'Seguimiento perdido. Vuelve a mirar una zona ya observada para recuperar el mapa.',
+        'select-surface':'Mueve el móvil hasta ver una retícula y toca para colocar el cubo.',
+        'scan-marker-in-xr':'Sigue mirando el marcador: alineando su posición con WebXR…',
+        'image-aligned-to-world':'Objeto alineado con el mundo. Puedes retirar el marcador.',
+        'alignment-unavailable-select-surface':'No se pudo alinear imagen/WebXR. Toca una superficie para recolocar el objeto.',
+        'camera-suspended':'Captura suspendida mientras la página está oculta.','camera-resumed':'Cámara reanudada; recuperando seguimiento…',
+        'xr-ended':'Sesión WebXR finalizada. Puedes iniciar nuevamente.','stopped':'Cámara y tracking detenidos.',
+      };
+
+      // 4. Crear el motor. El fallback WASM integrado se selecciona automáticamente.
+      const createEngine=()=>{
+        const instance=new WebAREngine({opencvURL:new URL('../vision/opencv.js',location.href).href,camera:{...($('#camera').value?{deviceId:$('#camera').value}:{}),width:1280,height:720,maxFrameWidth:640,fps:60,focusMode:'continuous',adaptive:true},
+          keepContentOnLost:$('#keep-visible').checked,imageLossGraceMs:Number($('#loss-tolerance').value),imageSmoothingMs:Number($('#pose-smoothing').value),
+          overlayRoot:overlay,
+          attachXRSession:session=>{hide();if(background)background.object3D.visible=false;return renderer.xr.setSession(session);},
+          getXRContext:()=>renderer.getContext(),
+        });
+        engine=instance;background=new ThreeCameraBackground(instance.videoElement);scene.add(background.object3D);
+        group.bind(instance);
+        instance.onTargetVisibility(event=>{if(event.targetId==='default')stage.dataset.contentVisible=String(event.visible);});
+        instance.onTargetLost(()=>{stage.dataset.tracked='false';});
+        const issueLabels={'low-texture':'Pocos detalles en imagen','small-target':'Marcador pequeño','blur':'Posible desenfoque','high-motion':'Movimiento rápido','insufficient-matches':'Pocas coincidencias','occlusion-or-out-of-view':'Posible oclusión o fuera de encuadre','device-load':'Carga de procesamiento alta'};
+        instance.onTrackingQuality(quality=>{stage.dataset.trackingQuality=quality.state;
+          $('#quality').textContent=`Calidad ${Math.round(quality.score*100)}% · ${quality.issues.map(issue=>issueLabels[issue]).join(' · ')||'Seguimiento con evidencia'} (diagnóstico orientativo)`;
+        });
+        instance.videoElement.style.opacity='0';instance.videoElement.setAttribute('aria-hidden','true');stage.prepend(instance.videoElement);
+        instance.videoElement.addEventListener('resize',resize);
+        instance.onPose((matrix,pose)=>{
+          reticle.visible=false;stage.dataset.tracked='true';stage.dataset.backend=pose.backend;lastPose=pose;
+          if(status.textContent.startsWith('Seguimiento activo'))status.textContent=`Seguimiento activo · ${pose.backend}`;
+          if(pose.backend!=='webxr'){
+            background.object3D.visible=true;camera.matrix.fromArray(pose.viewMatrix).invert();camera.updateMatrixWorld(true);
+            if(pose.projectionMatrix){lastProjection=pose.projectionMatrix;camera.projectionMatrix.fromArray(lastProjection);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}
+          }
+        });
+        instance.onSurface(matrix=>{reticle.matrix.fromArray(matrix);reticle.matrixWorldNeedsUpdate=true;reticle.visible=!group.visible;});
+        instance.onStatus(message=>{
+          stage.dataset.tracking=message;
+          status.textContent=message==='tracked'?`Seguimiento activo · ${lastPose?.backend??'visión'}`:messages[message]??message;
+          if(['odometry-lost','tracking-lost','stopped','xr-ended','camera-suspended','starting-webxr','select-surface','scan-marker-in-xr','scan-floor'].includes(message))hide();
+          if(background&&['camera-ready','camera-resumed','target-loaded'].includes(message)&&!renderer.xr.isPresenting)background.object3D.visible=true;
+          if(background&&['starting-webxr','stopped','xr-ended'].includes(message))background.object3D.visible=false;
+          if(message==='xr-ended'){controls(false);resize();}
+        });
+        instance.onMetrics(metrics=>{if(metrics.processedFrames%5===0){$('#metrics').textContent=`Procesamiento ${metrics.averageProcessingMs.toFixed(1)} ms · objetivo ${metrics.targetAnalysisFPS.toFixed(0)} FPS`;}});
+        instance.onError(error=>{hide();showError(error);if(instance.state==='Idle')controls(false);});return instance;
+      };
+      overlay.addEventListener('beforexrselect',event=>{if(event.target.closest?.('header'))event.preventDefault();});
+
+      // 5. Solicitar permisos desde el clic y cargar el marcador real del ejemplo.
+      startButton.onclick=async()=>{
+        controls(false,true);hide();lastProjection=null;clearExports();let active=null;
+        try{active=engine??createEngine();await active.startCamera();if(engine!==active)return;resize();
+          await listCameras();
+          const physicalWidthMeters=Number($('#target-width').value)/100;
+          const result=await active.loadImageTarget($('#target').files[0]??'../marker.png',{physicalWidthMeters});
+          if(engine!==active)return;
+          $('#target-info').textContent=`Marcador listo: ${result.metadata.quality.featureCount} puntos · ${Math.round(result.metadata.quality.coverage*100)}% de cobertura. No necesitas cargar .dat ni JSON.`;
+          for(const [id,blob,name] of [
+            ['download-dat',new Blob([result.buffer],{type:'application/octet-stream'}),'target.dat'],
+            ['download-json',new Blob([JSON.stringify(result.metadata,null,2)],{type:'application/json'}),'target.json']]){
+            const link=$('#'+id),url=URL.createObjectURL(blob);exportURLs.push(url);link.href=url;link.download=name;link.hidden=false;
+          }
+          if(engine===active)controls(true);
+        }catch(error){if(!active||engine===active){showError(error);controls(active?active.state!=='Idle':false);}}
+      };
+
+      // 6. Conservar exige observación/alineación; una nueva colocación es explícita.
+      slamButton.onclick=async()=>{
+        if(!engine)return;const active=engine;controls(true,true);
+        try{const result=await active.enableSLAM({backend:$('#backend').value,placement:$('#placement').value});
+          if(engine!==active)return;if(result.placement==='preserved')status.textContent='Objeto anclado al mapa del entorno. Puedes retirar el marcador.';
+        }catch(error){if(engine===active)showError(error);}finally{if(engine===active){controls(true);slamButton.disabled=active.state==='TrackingSurface';}}
+      };
+
+      // 7. Esperar liberación nativa antes de permitir otra sesión de cámara.
+      const stop=async()=>{controls(false,true);const active=engine;engine=null;hide();
+        if(active){await active.stop();active.dispose();}background?.dispose();background=null;lastProjection=null;lastPose=null;controls(false);resize();void listCameras();};
+      stopButton.onclick=stop;
+
+      // 8. Recuperación de contexto GPU y ciclo de vida, incluido bfcache.
+      renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();contextLost=true;void stop();renderer.setAnimationLoop(null);status.textContent='Contexto WebGL perdido. Esperando recuperación…';});
+      renderer.domElement.addEventListener('webglcontextrestored',()=>{contextLost=false;renderer.setAnimationLoop(render);controls(false);status.textContent='WebGL recuperado. Inicia de nuevo la cámara.';});
+      addEventListener('pagehide',event=>{clearExports();void stop();if(!event.persisted){videoGeneration++;video.dispose();modelGeneration++;model.dispose();group.dispose();renderer.setAnimationLoop(null);geometry.dispose();material.dispose();reticleGeometry.dispose();reticleMaterial.dispose();renderer.dispose();}});
+      void listCameras();controls(false);status.textContent='Inicia la cámara y apunta al marcador de ejemplo. Todo el procesamiento se ejecuta localmente.';
+    }catch(error){showError(error);}
+  </script>
+</body></html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es"><head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>WebAR · Informes recibidos en el PC</title><link rel="stylesheet" href="style.css"><script defer src="dashboard.js"></script></head>
+<body data-view="desktop"><main>
+  <h1>Informes WebAR recibidos en el computador</h1>
+  <p>Los teléfonos envían estadísticas al mismo servidor HTTPS. Esta página se actualiza cada cinco segundos.</p>
+  <p><a href="mobile.html">Abrir recorrido de los ejemplos</a> · <a href="../Examples/index.html">Galería</a></p>
+  <p id="connection" role="status">Conectando…</p>
+  <label>Equipo <select id="device"><option value="">Todos</option></select></label>
+  <label>Ejemplo <select id="example"><option value="">Todos</option></select></label>
+  <label><input id="latest" type="checkbox" checked>Solo último intento por equipo/ejemplo</label>
+  <label><input id="automated" type="checkbox">Incluir verificaciones automatizadas</label>
+  <p id="counts"></p>
+  <section id="detail" hidden><button id="close" type="button">Cerrar detalle</button><a id="download">Descargar desde el PC</a><pre id="json"></pre></section>
+  <div class="table"><table><thead><tr><th>Última recepción</th><th>Equipo</th><th>Ejemplo</th><th>Estado / envío</th><th>Backend observado</th><th>Poses</th><th>Primera pose</th><th>Proceso p95</th><th>Lectura p95</th><th>Perfil / SDK</th><th>Errores</th><th>Informe</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <p>Recibido no significa aprobado. Los tiempos de render no equivalen a FPS de GPU y las poses relativas no miden deriva física.</p>
+</main></body></html>

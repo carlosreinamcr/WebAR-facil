@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">
+<title>Dos marcadores y contenido independiente</title>
+<style>body{margin:0;font:16px system-ui;background:#15202a;color:white}header{padding:12px}label{display:block}#view{height:65vh;height:65dvh;width:100%}</style>
+</head>
+<body>
+<header>
+  <label>Imagen A <input id="image-a" type="file" accept="image/jpeg,image/png"></label>
+  <label>Imagen B diferente <input id="image-b" type="file" accept="image/jpeg,image/png"></label>
+  <label><input id="keep" type="checkbox" checked>Mantener contenido tras pérdida</label>
+  <button id="start">Iniciar dos marcadores</button><button id="stop">Detener</button><p id="status">Usa los marcadores de ejemplo o selecciona dos imágenes distintas.</p>
+</header><div id="view"></div>
+<script src="../dist/webar-facil.min.js"></script>
+<script>
+  const {ThreeARScene,ThreeARModel}=WebARFacil;
+  const app=new ThreeARScene({container:document.querySelector('#view'),engineOptions:{opencvURL:new URL('../vision/opencv.js',location.href),keepContentOnLost:true}});
+  for(const id of ['a','b']){
+    const model=new ThreeARModel({dracoDecoderPath:new URL('../decoders/draco/',location.href)});
+    app.addContent(id,model);model.load(id==='a'?'./assets/Kai-WebAR-Facil.glb':'./assets/cohete.glb').catch(error=>document.querySelector('#status').textContent=error.message);
+  }
+  app.engine.on('targetFound',event=>document.querySelector('#status').textContent=`Encontrado ${event.targetId}`);
+  app.engine.on('targetLost',event=>document.querySelector('#status').textContent=`Perdido ${event.targetId}; retenido: ${event.retained}`);
+  document.querySelector('#keep').onchange=event=>app.engine.setKeepContentOnLost(event.target.checked);
+  document.querySelector('#start').onclick=async()=>{
+    const first=document.querySelector('#image-a').files[0]??'./assets/marcador.jpg',second=document.querySelector('#image-b').files[0]??'./assets/marcador2.jpg';
+    document.querySelector('#start').disabled=true;
+    try{
+      await app.engine.startCamera();await app.engine.addImageTarget('a',first);await app.engine.addImageTarget('b',second);
+      document.querySelector('#status').textContent='Marcadores listos. Cada imagen controla su propio contenido.';
+    }catch(error){await app.engine.stop();document.querySelector('#status').textContent=error.message;document.querySelector('#start').disabled=false;}
+  };
+  document.querySelector('#stop').onclick=async()=>{await app.engine.stop();document.querySelector('#start').disabled=false;};
+  addEventListener('pagehide',()=>{void app.dispose();});
+</script>
+</body>
+</html>

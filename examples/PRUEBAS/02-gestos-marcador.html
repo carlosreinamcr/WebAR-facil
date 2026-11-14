@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>02 · Mover, girar y escalar con marcador</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #edf3f8; color: #142b40; font: 16px/1.45 system-ui; }
+    header { padding: 12px; } h1 { margin: 4px 0; font-size: 21px; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input { font: inherit; padding: 9px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } button:disabled { cursor: default; }
+    input[type="text"] { width: min(100%, 360px); } input[type="range"] { width: min(100%, 320px); }
+    webar-scene { display: block; height: 65vh; height: 65dvh; min-height: 320px; }
+  </style>
+  <!-- 1. Un solo SDK: incluye Three.js, loaders, componentes y controles de cámara.
+       Esta ruta es para examples/PRUEBAS. El build la adapta en dist/examples/PRUEBAS.
+       Servir con HTTP/HTTPS; en el teléfono utiliza HTTPS. -->
+  <script defer src="../../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería de ejemplos</a>
+    <h1>02. Mover, girar y escalar con marcador</h1>
+  <p class="example-documentation" data-doc-en="interaction.html#enable-touch-gestures"><a href="../../docs/interaction.html#gestos-optativos">Cómo desarrollar este ejemplo</a></p>
+    <p>Selecciona Mover para desplazar sobre el plano. En Girar y escalar, usa arrastre, pellizco o giro de dos dedos. Los gestos se realizan dentro del visor.</p>
+    <p><a href="./assets/marcador.png" target="_blank" rel="noopener">Abrir marcador</a> · Pulsa «Iniciar AR» y apunta a la imagen del marcador, mostrada en otra pantalla o impresa.</p>
+    <button type="button" data-mode="move" aria-pressed="false" disabled>Mover</button>
+    <button type="button" data-mode="rotate" aria-pressed="true" disabled>Girar y escalar</button>
+    <p id="message" role="status">Pulsa «Iniciar AR» en la escena.</p>
+  </header>
+  <!-- 2. La escena crea el visor y los botones Iniciar AR / Detener.
+       Los cambios de contenido no requieren abrir otra cámara. -->
+  <webar-scene id="ar" performance="auto" diagnostics gestures min-scale="0.1" max-scale="10">
+    <p>Cargando SDK… Si este texto permanece, revisa la ruta del script y que hayas ejecutado npm run build.</p>
+    <!-- JPG/PNG: el motor compila el marcador automáticamente al iniciar.
+         physical-width indica el ancho IMPRESO de la imagen en metros. -->
+    <webar-target src="./assets/marcador.png" target-id="poster" physical-width="0.2">
+      <!-- Sustituye src por tu GLB. size ajusta su dimensión mayor.
+           position y rotation modifican el contenido, no la pose del tracking. -->
+      <webar-model id="model" src="./assets/robot.glb" size="0.35" rotation="0 0 0"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // 3. DOMContentLoaded espera también al SDK cargado con defer.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar');
+      const message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const { THREE } = WebARFacil;
+      const element = document.querySelector('#model');
+      const buttons = [...document.querySelectorAll('[data-mode]')];
+      let mode = 'rotate';
+      let disposeDrag = () => {};
+      for (const button of buttons) {
+        button.onclick = () => {
+          mode = button.dataset.mode;
+          buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+          message.textContent = mode === 'move'
+            ? 'Arrastra el modelo con un dedo para moverlo sobre el plano.'
+            : 'Arrastra para girar; pellizca para escalar; gira dos dedos para rotar.';
+        };
+      }
+      scene.addEventListener('ar-stopped', () => {
+        disposeDrag(); buttons.forEach(button => { button.disabled = true; });
+      });
+      scene.addEventListener('ar-ready', () => {
+        disposeDrag(); buttons.forEach(button => { button.disabled = false; });
+        const app = scene.app, canvas = app.renderer.domElement;
+        const controller = new AbortController();
+        const events = { capture: true, passive: false, signal: controller.signal };
+        const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+        const hit = new THREE.Vector3(), offset = new THREE.Vector3();
+        const plane = new THREE.Plane();
+        let pointer = null;
+        const anchor = app.getAnchor('poster');
+
+        function pointOnPlane(event) {
+          const bounds = canvas.getBoundingClientRect();
+          if (!bounds.width || !bounds.height) return false;
+          ndc.set((event.clientX - bounds.left) / bounds.width * 2 - 1,
+            -(event.clientY - bounds.top) / bounds.height * 2 + 1);
+          app.camera.updateMatrixWorld(true); anchor.updateWorldMatrix(true, true);
+          ray.setFromCamera(ndc, app.camera);
+          // El plano X/Z pertenece al anchor: se adapta a la pose del marcador/suelo.
+          const normal = new THREE.Vector3(0, 1, 0).transformDirection(anchor.matrixWorld);
+          plane.setFromNormalAndCoplanarPoint(normal, anchor.getWorldPosition(new THREE.Vector3()));
+          return !!ray.ray.intersectPlane(plane, hit);
+        }
+        canvas.addEventListener('pointerdown', event => {
+          if (mode !== 'move') return; // En giro/escala trabaja el controlador del SDK.
+          event.stopPropagation(); event.preventDefault();
+          if (pointer !== null || event.button !== 0 || !anchor.visible || !element.model) return;
+          if (!pointOnPlane(event) || !ray.intersectObject(element.model, true).length) return;
+          pointer = event.pointerId;
+          offset.copy(element.model.position).sub(anchor.worldToLocal(hit.clone()));
+          canvas.setPointerCapture(pointer);
+        }, events);
+        canvas.addEventListener('pointermove', event => {
+          if (event.pointerId !== pointer) return;
+          event.stopPropagation(); event.preventDefault();
+          if (!anchor.visible || !pointOnPlane(event) || !element.model) return;
+          const local = anchor.worldToLocal(hit.clone()).add(offset);
+          // Mover X/Z; conservar la altura y el giro/escala actuales.
+          element.setAttribute('position', `${local.x} ${element.model.position.y} ${local.z}`);
+        }, events);
+        function end(event) {
+          if (event.pointerId !== pointer) return;
+          event.stopPropagation();
+          if (canvas.hasPointerCapture(pointer)) canvas.releasePointerCapture(pointer);
+          pointer = null;
+        }
+        canvas.addEventListener('pointerup', end, events);
+        canvas.addEventListener('pointercancel', end, events);
+        canvas.addEventListener('lostpointercapture', end, events);
+        disposeDrag = () => {
+          if (pointer !== null && canvas.hasPointerCapture(pointer)) canvas.releasePointerCapture(pointer);
+          pointer = null; controller.abort();
+        };
+      });
+    });
+  </script>
+</body>
+</html>

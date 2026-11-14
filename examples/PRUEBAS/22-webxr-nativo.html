@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>22. WebXR nativo con hit-test</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>22. WebXR nativo con hit-test</h1>
+  <p class="example-documentation" data-doc-en="spatial-tracking.html"><a href="../../docs/spatial-tracking.html#backend-webxr">Cómo desarrollar este ejemplo</a></p>
+    <p>Inicia cámara y pulsa Activar SLAM para solicitar WebXR. Si el navegador rechaza la sesión, la escena usa odometría por cámara. En WebXR toca la superficie. Con odometría pulsa Colocar aquí.</p>
+    <p id="support" role="status">Consultando soporte WebXR…</p>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" mode="slam" backend="auto" placement="manual" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+<webar-model id="model" src="../assets/robot.glb" size="0.25"></webar-model>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      // Usa ?backend=webxr para verificar exclusivamente la sesión nativa.
+      const nativeOnly = new URLSearchParams(location.search).get('backend') === 'webxr';
+      if (nativeOnly) scene.setAttribute('backend', 'webxr');
+      // Esta consulta no garantiza que se concedan la sesión y hit-test.
+      WebARFacil.SLAMManager.isSupported().then(supported => {
+        document.querySelector('#support').textContent = supported
+          ? 'immersive-ar disponible. Aún deben concederse sesión y hit-test.'
+          : 'WebXR no disponible en este navegador. El modo automático usa la cámara.';
+      });
+      scene.addEventListener('ar-slam', ({detail}) => {
+        message.textContent = detail.backend === 'webxr'
+          ? 'WebXR activo. Selecciona una superficie dentro de XR.'
+          : 'Odometría por cámara activa. Desplaza el teléfono y pulsa Colocar aquí al detectar una superficie.';
+      });
+      scene.addEventListener('ar-pose', event => {
+        if (event.detail.backend === 'webxr') message.textContent = 'Contenido colocado con WebXR; escala métrica.';
+      });
+    });
+  </script>
+</body>
+</html>

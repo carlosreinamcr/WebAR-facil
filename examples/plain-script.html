@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">
+<title>WebAR desde un script</title>
+<style>body{margin:0;font:16px system-ui;background:#15202a;color:white}header{padding:12px}#view{height:70vh;height:70dvh;width:100%}</style>
+</head>
+<body>
+<header><button id="start">Iniciar AR</button><button id="stop">Detener</button><p id="status">Apunta al marcador de ejemplo.</p></header>
+<div id="view"></div>
+<!-- Incluye Three.js, wrappers y motor. No necesita importmap ni otra etiqueta de script. -->
+<script src="../dist/webar-facil.min.js"></script>
+<script>
+  const {ThreeARScene,ThreeARModel}=WebARFacil;
+  const app=new ThreeARScene({container:document.querySelector('#view'),engineOptions:{
+    opencvURL:new URL('../vision/opencv.js',location.href),keepContentOnLost:true,imageLossGraceMs:500,
+  }});
+  const model=new ThreeARModel({dracoDecoderPath:new URL('../decoders/draco/',location.href)});
+  app.addContent('poster',model); // Cambia el archivo por tu GLB normal, Draco o Meshopt.
+  const modelReady=model.load('./assets/Kai-WebAR-Facil.glb');
+  app.engine.on('targetFound',event=>document.querySelector('#status').textContent=`Encontrado: ${event.targetId}`);
+  app.engine.on('targetLost',event=>document.querySelector('#status').textContent=`Perdido: ${event.targetId}. Contenido retenido: ${event.retained}`);
+  app.engine.onError(error=>document.querySelector('#status').textContent=error.message);
+  document.querySelector('#start').onclick=async()=>{
+    const button=document.querySelector('#start');button.disabled=true;
+    try{await modelReady;await app.engine.startCamera();await app.engine.addImageTarget('poster','./assets/marcador.jpg');}
+    catch(error){document.querySelector('#status').textContent=error.message;button.disabled=false;}
+  };
+  document.querySelector('#stop').onclick=async()=>{await app.engine.stop();document.querySelector('#start').disabled=false;};
+  addEventListener('pagehide',()=>{void app.dispose();});
+</script>
+</body>
+</html>

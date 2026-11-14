@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+tests/generated/
+public/vision/opencv.js
+public/vendor/*.js
+artifacts/
+public/docs/
+public/llms.txt
+public/llms-full.txt
+public/benchmarks/
+reports/local-devices/

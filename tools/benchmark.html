@@ -1,0 +1,29 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Medición en dispositivo · WebAR</title>
+<style>body{font:16px system-ui;max-width:900px;margin:24px auto;padding:16px;background:#15202c;color:#f4f0e7}a{color:#8fe2d7}button,input{font:inherit;padding:10px;margin:5px}video{width:100%;max-height:45vh}pre{white-space:pre-wrap}</style>
+<h1>Medición de tracking en tu dispositivo</h1><p><a href="../">Ejemplo 3D</a> · <a href="../marker.png" target="_blank">Marcador de prueba</a></p>
+<p>Apunta al marcador y mantén la sesión activa varios minutos. Después prueba oclusión, movimiento, cambios de luz y recuperación. El informe distingue frecuencia de poses, latencia y callbacks rAF; estos últimos no certifican 60 FPS de una escena 3D.</p>
+<label>Dispositivo y navegador <input id="device" placeholder="Ej. modelo y versión"></label><label>Duración (30–600 segundos) <input id="duration" type="number" min="30" max="600" value="120"></label><button id="start">Iniciar medición</button><button id="stop" disabled>Detener y guardar JSON</button><a id="download" hidden>Descargar informe JSON</a><p id="status" role="status">Listo.</p><p id="elapsed"></p><div id="video"></div><pre id="report"></pre>
+<script type="module">
+import {WebAREngine} from '../dist/webar-facil.core.js';
+const $=s=>document.querySelector(s),percentile=(a,p)=>{const sorted=[...a].sort((x,y)=>x-y);return sorted[Math.min(sorted.length-1,Math.floor(sorted.length*p))]??null;};
+let engine=null,running=false,started=0,raf=0,last=0,timings=[],latencies=[],intervals=[],poses=0,losses=0,timer=0,downloadURL,lastSecond=-1,buckets=new Map();
+function animation(time){if(!running)return;if(last&&intervals.length<200000)intervals.push(time-last);last=time;const second=Math.floor((time-started)/1000);if(second!==lastSecond){lastSecond=second;$('#elapsed').textContent=`Grabando ${second}s`; }raf=requestAnimationFrame(animation);}
+$('#start').onclick=async()=>{if(engine)return;const duration=Number($('#duration').value);if(!Number.isInteger(duration)||duration<30||duration>600){$('#status').textContent='Duración inválida.';return;}timings=[];latencies=[];intervals=[];poses=0;losses=0;last=0;lastSecond=-1;buckets=new Map();$('#duration').disabled=true;
+  const active=new WebAREngine({opencvURL:new URL('../vision/opencv.js',location.href).href,camera:{adaptive:true,maxFrameWidth:640}});engine=active;$('#video').append(active.videoElement);$('#start').disabled=true;
+  active.onPose((_matrix,pose)=>{if(running){poses++;const processing=pose.diagnostics?.processingMs??0,now=performance.now(),latency=now-pose.timestampMs;timings.push(processing);latencies.push(latency);const bucket=Math.floor((now-started)/10000),entry=buckets.get(bucket)??{startSeconds:bucket*10,poses:0,sumProcessingMs:0,maxProcessingMs:0,sumLatencyMs:0};entry.poses++;entry.sumProcessingMs+=processing;entry.maxProcessingMs=Math.max(entry.maxProcessingMs,processing);entry.sumLatencyMs+=latency;buckets.set(bucket,entry);}});
+  active.onStatus(message=>{if(message==='not-found')losses++;$('#status').textContent=message;});active.onError(error=>{$('#status').textContent=error.message;});
+  try{await active.startCamera();await active.loadTarget(new URL('../target.dat',location.href));started=performance.now();running=true;raf=requestAnimationFrame(animation);timer=setTimeout(()=>$('#stop').click(),duration*1000);$('#stop').disabled=false;}
+  catch(error){$('#status').textContent=error.message;active.dispose();engine=null;$('#start').disabled=false;$('#duration').disabled=false;}
+};
+$('#stop').onclick=async()=>{if(!engine)return;running=false;clearTimeout(timer);cancelAnimationFrame(raf);const elapsed=performance.now()-started;
+  const report={device:$('#device').value,userAgent:navigator.userAgent,durationMs:elapsed,poses,poseFPS:poses/(elapsed/1000),lossEpisodes:losses,
+    nftProcessingMs:{p50:percentile(timings,.5),p95:percentile(timings,.95)},captureToPoseMs:{p50:percentile(latencies,.5),p95:percentile(latencies,.95)},
+    requestAnimationFrameIntervalMs:{p50:percentile(intervals,.5),p95:percentile(intervals,.95)},camera:engine.cameraSettings,
+    tenSecondBuckets:[...buckets.values()].map(value=>({startSeconds:value.startSeconds,poses:value.poses,averageProcessingMs:value.sumProcessingMs/value.poses,maxProcessingMs:value.maxProcessingMs,averageLatencyMs:value.sumLatencyMs/value.poses})),
+    calibration:'estimated',note:'No thermal sensor or external telemetry. Camera pose accuracy must be checked against known geometry.'};
+  await engine.stop();engine.dispose();engine=null;$('#start').disabled=false;$('#stop').disabled=true;$('#duration').disabled=false;$('#report').textContent=JSON.stringify(report,null,2);
+  if(downloadURL)URL.revokeObjectURL(downloadURL);downloadURL=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));const link=$('#download');link.href=downloadURL;link.download='webar-device-benchmark.json';link.hidden=false;
+};
+addEventListener('pagehide',()=>{running=false;clearTimeout(timer);cancelAnimationFrame(raf);engine?.dispose();if(downloadURL)URL.revokeObjectURL(downloadURL);},{once:true});
+</script></html>

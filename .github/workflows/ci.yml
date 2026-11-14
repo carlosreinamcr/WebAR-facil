@@ -1,0 +1,47 @@
+name: WebAR validation
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prepare:vision
+      - run: npm run generate:demo
+      - run: npm run build
+      - run: npm run docs:check
+      - run: npm run check:release
+      - run: npm test
+      - run: npm run check:package
+  browsers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chrome webkit
+      - run: npm run build
+      - run: npm run docs:test-browser
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+      - run: npm run test:browser
+        env:
+          TEST_WEBKIT: '1'
+          PLAYWRIGHT_CHANNEL: chrome
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence
+          path: tests/generated/*.png

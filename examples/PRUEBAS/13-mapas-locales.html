@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>13 · Guardar y recuperar un mapa local</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #edf3f8; color: #142b40; font: 16px/1.45 system-ui; }
+    header { padding: 12px; } h1 { margin: 4px 0; font-size: 21px; } p { margin: 8px 0; }
+    a { color: #075ea8; } button { font: inherit; padding: 9px; margin: 3px; cursor: pointer; }
+    webar-scene { display: block; height: 65vh; height: 65dvh; min-height: 320px; }
+  </style>
+  <!-- 1. SDK local. El empaquetado adapta esta ruta en dist/examples/PRUEBAS. -->
+  <script defer src="../../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería de ejemplos</a>
+    <h1>13. Guardar, recuperar y borrar un mapa local</h1>
+  <p class="example-documentation" data-doc-en="maps.html"><a href="../../docs/maps.html#guardar-de-forma-optativa">Cómo desarrollar este ejemplo</a></p>
+    <p>Inicia AR, desplázate sobre una zona con textura y pulsa «Colocar aquí».
+      Sigue observando el entorno y después guarda el mapa.</p>
+    <p>Puedes detener, volver a iniciar y recuperar el mapa con la misma cámara,
+      orientación y configuración. Vuelve a mirar la zona original para relocalizarte.</p>
+    <button id="save-map" type="button" disabled>Guardar mapa</button>
+    <button id="restore-map" type="button" disabled>Recuperar mapa</button>
+    <button id="delete-map" type="button" disabled>Eliminar guardado</button>
+    <p id="message" role="status">El mapa se guarda solo en este navegador mediante IndexedDB.</p>
+    <p id="map-info">Consultando si existe un mapa guardado…</p>
+  </header>
+
+  <!-- 2. Estos mapas pertenecen al backend óptico. No son mapas ARCore/ARKit.
+       La escala es relativa. No cambies de lente/perfil para recuperar un mapa.
+       El mapa es disperso: puntos + descriptores + keyframes; no una malla completa. -->
+  <webar-scene id="ar" mode="slam" backend="optical-flow" placement="manual"
+    performance="auto" diagnostics>
+    <p>Cargando SDK… Sirve por HTTP/HTTPS; en el teléfono utiliza HTTPS.</p>
+    <!-- size=3 está en unidades relativas del mapa óptico; ajusta al entorno. -->
+    <webar-model id="model" src="./assets/robot.glb" size="3"></webar-model>
+  </webar-scene>
+
+  <script>
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), model = document.querySelector('#model');
+      const message = document.querySelector('#message'), info = document.querySelector('#map-info');
+      const save = document.querySelector('#save-map'), restore = document.querySelector('#restore-map');
+      const remove = document.querySelector('#delete-map');
+      const key = 'mesa-de-prueba';
+      let ready = false, busy = false, hasMap = false, waitingForMap = false;
+      let unsubscribePose = () => {};
+
+      // 3. Adaptador de almacenamiento DE LA APLICACIÓN, no un servicio externo.
+      // IndexedDB usa structured clone y conserva Float32Array/Uint8Array.
+      // JSON.stringify/parse por sí solos NO conservan esos tipos del snapshot.
+      function openDatabase() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open('webar-pruebas-mapas', 1);
+          request.onupgradeneeded = () => request.result.createObjectStore('maps');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+      async function storedMap(mode, operation) {
+        const database = await openDatabase();
+        try {
+          return await new Promise((resolve, reject) => {
+            const transaction = database.transaction('maps', mode);
+            const request = operation(transaction.objectStore('maps'));
+            let result;
+            request.onsuccess = () => { result = request.result; };
+            transaction.oncomplete = () => resolve(result);
+            transaction.onabort = () => reject(transaction.error || new Error('Almacenamiento cancelado.'));
+            transaction.onerror = () => reject(transaction.error || request.error);
+          });
+        } finally {
+          database.close();
+        }
+      }
+      function updateButtons() {
+        save.disabled = !ready || busy || waitingForMap || scene.placementState !== 'placed';
+        restore.disabled = !ready || busy || waitingForMap || !hasMap;
+        remove.disabled = busy || !hasMap;
+      }
+      function describe(snapshot) {
+        info.textContent = snapshot
+          ? `Mapa guardado: ${snapshot.map.keyframes.length} vistas de referencia; escala ${snapshot.map.scale}.`
+          : 'No hay mapa guardado en este navegador.';
+      }
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      scene.addEventListener('ar-placement', updateButtons);
+      scene.addEventListener('ar-stopped', () => {
+        ready = false; waitingForMap = false; unsubscribePose(); updateButtons();
+      });
+      scene.addEventListener('ar-ready', () => {
+        ready = true; waitingForMap = false; unsubscribePose();
+        unsubscribePose = scene.engine.onPose((_matrix, pose) => {
+          if (!waitingForMap || !pose.diagnostics?.relocalized) return;
+          // 6. Solo volver a mostrar el contenido tras una relocalización real.
+          waitingForMap = false;
+          if (model.model) model.model.visible = true;
+          message.textContent = 'Mapa relocalizado. Si aparece el anillo, confirma con Colocar aquí.';
+          updateButtons();
+        });
+        message.textContent = 'Escanea y coloca el robot para guardar, o recupera un mapa existente.';
+        updateButtons();
+      });
+
+      // 4. Guardar requiere geometría suficiente; ar-ready no garantiza que exista mapa.
+      save.onclick = async () => {
+        const app = scene.app;
+        if (!app || busy) return;
+        busy = true; updateButtons();
+        try {
+          const snapshot = await app.engine.exportSLAMMap();
+          await storedMap('readwrite', store => store.put(snapshot, key));
+          hasMap = true; describe(snapshot);
+          if (scene.app === app) message.textContent = 'Mapa guardado. Ahora puedes detener y volver a iniciar.';
+        } catch (error) {
+          if (scene.app === app) message.textContent = error.message + ' Sigue escaneando antes de guardar.';
+        } finally { busy = false; updateButtons(); }
+      };
+
+      // 5. Importar no publica el ancla guardada como si fuera una pose nueva.
+      // La cámara tiene que observar y reconocer el entorno del mapa.
+      restore.onclick = async () => {
+        const app = scene.app;
+        if (!app || busy) return;
+        busy = true; updateButtons();
+        try {
+          const snapshot = await storedMap('readonly', store => store.get(key));
+          if (!snapshot) throw new Error('No hay mapa guardado.');
+          if (scene.app !== app) return;
+          if (model.model) model.model.visible = false;
+          await app.engine.importSLAMMap(snapshot);
+          if (scene.app !== app) return;
+          waitingForMap = true;
+          message.textContent = 'Mapa cargado. Mira la zona original y muévete despacio; esperando relocalización.';
+        } catch (error) {
+          if (scene.app === app) {
+            waitingForMap = false;
+            if (model.model) model.model.visible = true;
+            message.textContent = error.message + ' Si cambió la cámara/proyección, crea un mapa nuevo.';
+          }
+        } finally { busy = false; updateButtons(); }
+      };
+
+      // Borrar la copia persistida no elimina el mapa que está activo en memoria.
+      remove.onclick = async () => {
+        if (busy) return;
+        busy = true; updateButtons();
+        try {
+          await storedMap('readwrite', store => store.delete(key));
+          hasMap = false; describe(null);
+          message.textContent = 'Copia guardada eliminada. La sesión activa puede continuar.';
+        } catch (error) { message.textContent = error.message; }
+        finally { busy = false; updateButtons(); }
+      };
+
+      // Consultar almacenamiento no solicita cámara ni inicia el seguimiento.
+      storedMap('readonly', store => store.get(key)).then(snapshot => {
+        hasMap = !!snapshot; describe(snapshot); updateButtons();
+      }).catch(error => { info.textContent = 'Almacenamiento no disponible: ' + error.message; });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>18. Tolerancia y retención al perder el marcador</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>18. Tolerancia y retención al perder el marcador</h1>
+  <p class="example-documentation" data-doc-en="events.html#avoid-flicker-and-restarts"><a href="../../docs/events.html#retener-contenido-tras-la-perdida">Cómo desarrollar este ejemplo</a></p>
+    <p>Retira y vuelve a mostrar la imagen. Conservar la última transformación no equivale a un anclaje SLAM.</p>
+    <p><a href="../assets/marcador.jpg" target="_blank" rel="noopener">Abrir marcador</a> en otra pantalla o imprimirlo.</p>
+    <label><input id="retain" type="checkbox">Conservar contenido tras pérdida</label>
+    <label>Tolerancia <select id="grace"><option value="0">0 ms</option><option value="500" selected>500 ms</option><option value="1000">1000 ms</option></select></label>
+    <button id="apply-grace" type="button">Aplicar tolerancia e iniciar</button>
+    <p id="events">Encontrados: 0 · Perdidos: 0</p>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+    <!-- El JPG se compila automáticamente; 0.2 es el ancho impreso en metros. -->
+    <webar-target src="../assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model id="model" src="../assets/robot.glb" size="0.2"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      let found = 0, lost = 0;
+      const retain = document.querySelector('#retain'), events = document.querySelector('#events');
+      retain.onchange = () => {
+        scene.setAttribute('keep-content-on-lost', String(retain.checked));
+        // Esta política puede cambiar en vivo; no modifica la matriz de tracking.
+        scene.engine?.setKeepContentOnLost(retain.checked);
+      };
+      scene.addEventListener('targetFound', () => { found++; events.textContent = `Encontrados: ${found} · Perdidos: ${lost}`; });
+      scene.addEventListener('targetLost', event => {
+        lost++; events.textContent = `Encontrados: ${found} · Perdidos: ${lost}`;
+        message.textContent = event.detail.retained ? 'Última transformación retenida; no hay seguimiento nuevo.' : 'Contenido oculto tras pérdida.';
+      });
+      document.querySelector('#apply-grace').onclick = async event => {
+        event.target.disabled = true;
+        try {
+          await scene.stop();
+          // loss-grace se lee al iniciar: por eso aquí se reinicia la sesión.
+          scene.setAttribute('loss-grace', document.querySelector('#grace').value);
+          await scene.start();
+        } catch (error) { message.textContent = error.message; }
+        finally { event.target.disabled = false; }
+      };
+    });
+  </script>
+</body>
+</html>

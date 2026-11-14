@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>05 · Vídeo MP4 con marcador</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #edf3f8; color: #142b40; font: 16px/1.45 system-ui; }
+    header { padding: 12px; } h1 { margin: 4px 0; font-size: 21px; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input { font: inherit; padding: 9px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } button:disabled { cursor: default; }
+    input[type="text"] { width: min(100%, 360px); } input[type="range"] { width: min(100%, 320px); }
+    webar-scene { display: block; height: 65vh; height: 65dvh; min-height: 320px; }
+  </style>
+  <!-- 1. Un solo SDK: incluye Three.js, loaders, componentes y controles de cámara.
+       Esta ruta es para examples/PRUEBAS. El build la adapta en dist/examples/PRUEBAS.
+       Servir con HTTP/HTTPS; en el teléfono utiliza HTTPS. -->
+  <script defer src="../../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería de ejemplos</a>
+    <h1>05. Vídeo MP4 con marcador</h1>
+  <p class="example-documentation" data-doc-en="video.html"><a href="../../docs/video.html#video-declarativo-recomendado">Cómo desarrollar este ejemplo</a></p>
+    <p>El vídeo aparece como contenido AR. El recurso incluido muestra una figura roja sobre verde; puedes activar chroma añadiendo el atributo indicado en el código.</p>
+    <p><a href="./assets/marcador.png" target="_blank" rel="noopener">Abrir marcador</a> · Pulsa «Iniciar AR» y apunta a la imagen del marcador, mostrada en otra pantalla o impresa.</p>
+
+    <p id="message" role="status">Pulsa «Iniciar AR» en la escena.</p>
+  </header>
+  <!-- 2. La escena crea el visor y los botones Iniciar AR / Detener.
+       Los cambios de contenido no requieren abrir otra cámara. -->
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa la ruta del script y que hayas ejecutado npm run build.</p>
+    <!-- JPG/PNG: el motor compila el marcador automáticamente al iniciar.
+         physical-width indica el ancho IMPRESO de la imagen en metros. -->
+    <webar-target src="./assets/marcador.png" target-id="poster" physical-width="0.2">
+      <!-- MP4 original incluido. Cambia src por tu vídeo H.264/MP4.
+           muted facilita reproducción móvil; el SDK ofrece Reproducir vídeos si se bloquea.
+           flat lo pega al plano de la imagen; upright lo coloca de pie.
+           Añade chroma-key key-color="#00ff00" para eliminar el fondo verde del recurso. -->
+      <webar-video id="video" src="./assets/video.mp4" width="0.4"
+        orientation="flat" muted loop></webar-video>
+    </webar-target>
+  </webar-scene>
+</body>
+</html>

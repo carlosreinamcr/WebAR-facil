@@ -1,0 +1,10 @@
+{
+  "input": "public/marker.png",
+  "physicalWidthMeters": 0.2,
+  "format": "WART v2",
+  "featureCount": 4538,
+  "coverage": 0.9444444444444444,
+  "duplicateRatio": 0.095,
+  "usable": true,
+  "warnings": []
+}

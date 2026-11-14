@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>24. Modelo, texto y vídeo en un marcador</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>24. Modelo, texto y vídeo en un marcador</h1>
+  <p class="example-documentation" data-doc-en="recipes-programmatic.html#combine-model-text-and-video"><a href="../../docs/recipes-programmatic.html#combinar-modelo-texto-y-video">Cómo desarrollar este ejemplo</a></p>
+    <p>Tres contenidos comparten un anchor: el modelo animado, el vídeo y un texto. Los controles afectan solo al contenido elegido.</p>
+    <p><a href="../assets/marcador.jpg" target="_blank" rel="noopener">Abrir marcador</a> en otra pantalla o imprimirlo.</p>
+    <button id="toggle-model" type="button" disabled>Mostrar/ocultar modelo</button>
+    <button id="toggle-video" type="button" disabled>Pausar/continuar vídeo</button>
+    <label>Texto <input id="caption" type="text" maxlength="40" value="Producto en AR"></label>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+    <!-- El JPG se compila automáticamente; 0.2 es el ancho impreso en metros. -->
+    <webar-target src="../assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model id="model" src="../assets/Kai-WebAR-Facil.glb" animation="Running" size="0.17" position="-0.1 0 0"></webar-model>
+      <webar-video id="video" src="../assets/VideoAR.mp4" width="0.16" position="0.1 0 0" orientation="flat" muted loop></webar-video>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const { THREE } = WebARFacil, model = document.querySelector('#model'), video = document.querySelector('#video');
+      let text = null, texture = null, material = null, app = null;
+      function paint() {
+        if (!texture) return;
+        const ctx = texture.image.getContext('2d'); ctx.clearRect(0, 0, 1024, 256);
+        ctx.fillStyle = '#112b40'; ctx.fillRect(0, 0, 1024, 256);
+        ctx.fillStyle = 'white'; ctx.font = '48px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(document.querySelector('#caption').value, 512, 145, 960); texture.needsUpdate = true;
+      }
+      function release() {
+        if (text && app) app.removeContent(text);
+        material?.dispose(); texture?.dispose(); text = null; texture = null; material = null; app = null;
+        document.querySelectorAll('header button').forEach(button => { button.disabled = true; });
+      }
+      scene.addEventListener('ar-stopped', release);
+      scene.addEventListener('ar-ready', () => {
+        release(); app = scene.app;
+        const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 256;
+        texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+        material = new THREE.SpriteMaterial({ map: texture, toneMapped: false }); text = new THREE.Sprite(material);
+        text.name = 'texto-compuesto'; text.scale.set(0.3, 0.075, 1); text.position.y = 0.25;
+        app.addContent('poster', text); paint();
+        document.querySelectorAll('header button').forEach(button => { button.disabled = false; });
+      });
+      document.querySelector('#caption').oninput = paint;
+      document.querySelector('#toggle-model').onclick = () => { model.model.visible = !model.model.visible; };
+      document.querySelector('#toggle-video').onclick = async () => {
+        if (video.video.videoElement.paused) { try { await video.play(); } catch (error) { message.textContent = error.message; } }
+        else video.pause();
+      };
+    });
+  </script>
+</body>
+</html>

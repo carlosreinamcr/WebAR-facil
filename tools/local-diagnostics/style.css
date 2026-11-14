@@ -1,0 +1,6 @@
+/*! Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+ * Web: https://realidad-aumentada.com.co
+ * Blog: https://blog.realidad-aumentada.com.co
+ * YouTube: https://www.youtube.com/@carlosreinamcr
+ */
+*{box-sizing:border-box}body{margin:0;background:#edf3f8;color:#142b40;font:15px/1.45 system-ui}main{padding:18px;max-width:1600px;margin:auto}h1{font-size:25px}label{display:inline-block;margin:6px}input,select,button{font:inherit;padding:8px;max-width:100%}button{cursor:pointer}a{color:#075ea8}.table{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border:1px solid #c6d5e3;padding:8px;text-align:left;vertical-align:top}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#102a43;color:#fff;padding:12px;max-height:60vh;overflow:auto}#recipes{padding-left:24px}#recipes li{padding:10px;margin-bottom:8px;background:white;border-radius:6px}#recipes a{display:block;padding:4px}small{display:block;color:#4c6478}.ok{color:#125e38}.pending{color:#805900}@media(max-width:650px){main{padding:12px}h1{font-size:22px}}

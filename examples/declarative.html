@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>WebAR declarativo</title>
+  <style>body{margin:0}</style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <webar-scene>
+    <p role="status">Cargando WebAR… Si este mensaje permanece, comprueba que el script existe y es el build actualizado con componentes declarativos. Abre este ejemplo mediante HTTP/HTTPS: npm run dev y http://127.0.0.1:5173/examples/declarative.html. No uses file://.</p>
+    <webar-target src="./assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model src="./assets/Kai-WebAR-Facil.glb" size="0.2" rotation="0 180 0"></webar-model>
+    </webar-target>
+  </webar-scene>
+</body>
+</html>

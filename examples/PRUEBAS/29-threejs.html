@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>29. Three.js con renderer propio · WebAR Fácil</title>
+  <style>
+    body { margin:0; padding:16px; font:16px system-ui; background:#edf3f8; color:#142b40; }
+    button { font:inherit; padding:9px 14px; }
+    #view { height:60dvh; min-height:260px; display:grid; place-items:center; overflow:hidden; background:#102231; }
+    canvas { display:block; position:relative; }
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <a href="./index.html">← Galería</a>
+  <h1>29. Three.js con renderer propio</h1>
+  <p class="example-documentation" data-doc-en="threejs.html#use-an-existing-renderer"><a href="../../docs/threejs.html#renderer-existente">Cómo desarrollar este ejemplo</a></p>
+  <p>Esta página crea su renderer, cámara, luces y bucle de animación en JavaScript. Apunta al <a href="../assets/marcador.jpg" target="_blank" rel="noopener">marcador</a> para ver a Kai saludar.</p>
+  <button id="start" type="button">Iniciar AR</button>
+  <button id="stop" type="button" disabled>Detener</button>
+  <p id="status" role="status">Pulsa «Iniciar AR» para usar la cámara.</p>
+  <div id="view"></div>
+  <script>
+    addEventListener('DOMContentLoaded', () => {
+      const start = document.querySelector('#start');
+      const stop = document.querySelector('#stop');
+      const status = document.querySelector('#status');
+      const view = document.querySelector('#view');
+      if (!globalThis.WebARFacil) {
+        status.textContent = 'No se pudo cargar el SDK de WebAR Fácil.';
+        start.disabled = true;
+        return;
+      }
+      const {THREE, WebAREngine, ThreeARGroup, ThreeARModel, ThreeCameraBackground} = WebARFacil;
+      // 1. Three.js es dueño de la escena. El motor solo entrega poses y vídeo.
+      const engine = new WebAREngine({camera:{playbackContainer:view}});
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera();
+      camera.matrixAutoUpdate = false;
+      let renderer;
+      try {
+        renderer = new THREE.WebGLRenderer({antialias:true});
+      } catch (error) {
+        status.textContent = error.message;
+        start.disabled = true;
+        engine.dispose();
+        return;
+      }
+      renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+      view.append(renderer.domElement);
+
+      // 2. El wrapper aplica la pose y visibilidad al grupo que contiene a Kai.
+      const anchor = new ThreeARGroup().bind(engine,'poster');
+      const model = new ThreeARModel();
+      anchor.add(model);
+      const background = new ThreeCameraBackground(engine.videoElement);
+      scene.add(background.object3D,anchor,new THREE.HemisphereLight(0xffffff,0x53677c,2.5));
+
+      // 3. Usar la misma proporción para el vídeo y la proyección del motor.
+      function resize() {
+        const {videoWidth,videoHeight} = engine.videoElement;
+        const aspect = videoWidth && videoHeight ? videoWidth/videoHeight : 4/3;
+        const width = Math.min(view.clientWidth,view.clientHeight*aspect);
+        renderer.setSize(width,width/aspect);
+      }
+      const observer = new ResizeObserver(resize);
+      observer.observe(view);
+      engine.videoElement.addEventListener('resize',resize);
+      const unsubscribe = engine.onPose((_matrix,pose) => {
+        camera.matrix.fromArray(pose.viewMatrix).invert();
+        camera.updateMatrixWorld(true);
+        if (pose.projectionMatrix) {
+          camera.projectionMatrix.fromArray(pose.projectionMatrix);
+          camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+        }
+      });
+      engine.on('targetFound', () => { status.textContent = 'Marcador reconocido.'; });
+      engine.on('targetLost', () => { status.textContent = 'Vuelve a apuntar al marcador.'; });
+      engine.onError(error => { status.textContent = error.message; });
+
+      // 4. Iniciar desde un clic y actualizar la animación en cada render.
+      start.onclick = async () => {
+        start.disabled = true;
+        try {
+          await engine.startCamera();
+          let previous = performance.now();
+          renderer.setAnimationLoop(time => {
+            model.update(Math.min(0.1,(time-previous)/1000));
+            previous = time;
+            renderer.render(scene,camera);
+          });
+          await model.load('../assets/animaciones.glb',{fitSize:0.20,autoplay:false});
+          const clip = model.animations.find(item => item.name === 'Waving') ?? model.animations[0];
+          if (clip) model.playAnimation(clip.name);
+          await engine.addImageTarget('poster','../assets/marcador.jpg',{physicalWidthMeters:0.2});
+          stop.disabled = false;
+          if (!anchor.visible) status.textContent = 'Apunta al marcador.';
+        } catch (error) {
+          renderer.setAnimationLoop(null);
+          await engine.stop();
+          status.textContent = error.message;
+          start.disabled = false;
+        }
+      };
+      stop.onclick = async () => {
+        stop.disabled = true;
+        await engine.stop();
+        renderer.setAnimationLoop(null);
+        renderer.clear();
+        start.disabled = false;
+        status.textContent = 'Cámara detenida.';
+      };
+      addEventListener('pagehide', () => {
+        renderer.setAnimationLoop(null);
+        observer.disconnect();
+        engine.videoElement.removeEventListener('resize',resize);
+        unsubscribe();
+        anchor.dispose();
+        model.dispose();
+        background.dispose();
+        engine.dispose();
+        renderer.dispose();
+      }, {once:true});
+    });
+  </script>
+</body>
+</html>

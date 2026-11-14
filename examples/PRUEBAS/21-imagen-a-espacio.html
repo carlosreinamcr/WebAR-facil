@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>21. Del marcador al seguimiento espacial</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>21. Del marcador al seguimiento espacial</h1>
+  <p class="example-documentation" data-doc-en="spatial-tracking.html"><a href="../../docs/spatial-tracking.html#pasar-desde-una-imagen">Cómo desarrollar este ejemplo</a></p>
+    <p>Primero reconoce la imagen. Después, conserva marcador y entorno visibles mientras desplazas el teléfono para construir referencias del entorno.</p>
+    <p><a href="../assets/marcador.jpg" target="_blank" rel="noopener">Abrir marcador</a> en otra pantalla o imprimirlo.</p>
+    <button id="transition" type="button" disabled>Despegar del marcador</button>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" performance="auto" diagnostics backend="optical-flow">
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+    <!-- El JPG se compila automáticamente; 0.2 es el ancho impreso en metros. -->
+    <webar-target src="../assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model id="model" src="../assets/robot.glb" size="0.2"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const button = document.querySelector('#transition');
+      let transitioning = false;
+      scene.addEventListener('targetFound', () => { if (!transitioning) button.disabled = false; });
+      scene.addEventListener('targetLost', () => { button.disabled = true; });
+      scene.addEventListener('ar-stopped', () => { transitioning = false; button.disabled = true; });
+      button.onclick = async () => {
+        transitioning = true; button.disabled = true;
+        message.textContent = 'Construyendo mapa: desplaza la cámara manteniendo imagen y entorno visibles.';
+        try {
+          // preserve exige una pose reciente: si no se puede conservar, falla explícitamente.
+          const result = await scene.enableSLAM({ targetId: 'poster', placement: 'preserve', initializationTimeoutMs: 20000 });
+          message.textContent = `Backend: ${result.backend}; transición: ${result.placement}. Ya puedes retirar el marcador.`;
+        } catch (error) {
+          transitioning = false; button.disabled = !scene.engine;
+          message.textContent = error.message + ' Vuelve a reconocer la imagen e intenta de nuevo.';
+        }
+      };
+    });
+  </script>
+</body>
+</html>

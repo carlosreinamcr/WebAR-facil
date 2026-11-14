@@ -1,0 +1,318 @@
+{
+  "sdk": "aef4ddad324066a2",
+  "createdAt": "2026-11-09T21:40:09.347Z",
+  "environment": {
+    "node": "v24.14.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "fixture": "Synthetic projected marker, actual Worker/OpenCV WASM, 640x480; 4 warm-up frames excluded from timings in each case",
+  "summaries": [
+    {
+      "name": "steady-33ms",
+      "frames": 80,
+      "warmup": 4,
+      "expected": 80,
+      "tracked": 80,
+      "falsePositive": 0,
+      "maxCornerErrorPx": 1.1655506485478209,
+      "counts": {
+        "flowAttempts": 76,
+        "flowAccepted": 76,
+        "redetections": 9,
+        "orbExtractions": 9,
+        "flowInputPoints": 5553,
+        "cachedAttempts": 8,
+        "fullDetections": 1,
+        "matchingQueryDescriptors": 6677
+      },
+      "stages": {
+        "grayMs": {
+          "mean": 0.25835921052632066,
+          "p50": 0.24909999999999854,
+          "p95": 0.2984000000001288
+        },
+        "qualityMs": {
+          "mean": 0.058159210526310436,
+          "p50": 0.056100000000014916,
+          "p95": 0.0647999999998774
+        },
+        "opticalFlowMs": {
+          "mean": 4.64799999999999,
+          "p50": 4.630300000000034,
+          "p95": 5.04099999999994
+        },
+        "flowValidationMs": {
+          "mean": 0.3042684210526306,
+          "p50": 0.3002999999999929,
+          "p95": 0.43280000000004293
+        },
+        "orbMs": {
+          "mean": 1.6543763157894789,
+          "p50": 0,
+          "p95": 13.858100000000036
+        },
+        "matchingMs": {
+          "mean": 1.7698828947368412,
+          "p50": 0,
+          "p95": 5.348599999999919
+        },
+        "homographyMs": {
+          "mean": 0.038165789473683424,
+          "p50": 0,
+          "p95": 0.34639999999990323
+        },
+        "poseMs": {
+          "mean": 0.47708026315791136,
+          "p50": 0.39800000000013824,
+          "p95": 1.0622000000000753
+        },
+        "workerMs": {
+          "mean": 9.365832894736833,
+          "p50": 5.794800000000009,
+          "p95": 26.1420999999998
+        },
+        "roundTripMs": {
+          "mean": 9.52878947368423,
+          "p50": 5.924000000000092,
+          "p95": 26.50279999999998
+        },
+        "transportAndSchedulingMs": {
+          "mean": 0.1629565789473962,
+          "p50": 0.15000000000009095,
+          "p95": 0.2976000000003296
+        }
+      }
+    },
+    {
+      "name": "steady-140ms",
+      "frames": 80,
+      "warmup": 4,
+      "expected": 80,
+      "tracked": 80,
+      "falsePositive": 0,
+      "maxCornerErrorPx": 1.1944747330418781,
+      "counts": {
+        "flowAttempts": 76,
+        "flowAccepted": 76,
+        "redetections": 9,
+        "orbExtractions": 9,
+        "flowInputPoints": 5561,
+        "cachedAttempts": 8,
+        "fullDetections": 1,
+        "matchingQueryDescriptors": 6677
+      },
+      "stages": {
+        "grayMs": {
+          "mean": 0.24817236842101775,
+          "p50": 0.24060000000008586,
+          "p95": 0.32009999999991123
+        },
+        "qualityMs": {
+          "mean": 0.059384210526314075,
+          "p50": 0.05599999999958527,
+          "p95": 0.0969000000000051
+        },
+        "opticalFlowMs": {
+          "mean": 6.872077631578951,
+          "p50": 6.869500000000244,
+          "p95": 7.709800000000087
+        },
+        "flowValidationMs": {
+          "mean": 0.29310263157890104,
+          "p50": 0.285200000000259,
+          "p95": 0.41000000000030923
+        },
+        "orbMs": {
+          "mean": 1.6267039473684182,
+          "p50": 0,
+          "p95": 13.761799999999766
+        },
+        "matchingMs": {
+          "mean": 1.7824921052631633,
+          "p50": 0,
+          "p95": 5.271099999999933
+        },
+        "homographyMs": {
+          "mean": 0.03666315789474227,
+          "p50": 0,
+          "p95": 0.3483000000001084
+        },
+        "poseMs": {
+          "mean": 0.45279210526316666,
+          "p50": 0.38049999999975626,
+          "p95": 1.029399999999896
+        },
+        "workerMs": {
+          "mean": 11.527131578947385,
+          "p50": 8.058700000000044,
+          "p95": 28.34900000000016
+        },
+        "roundTripMs": {
+          "mean": 11.677169736842089,
+          "p50": 8.198399999999765,
+          "p95": 28.4988000000003
+        },
+        "transportAndSchedulingMs": {
+          "mean": 0.15003815789470454,
+          "p50": 0.14069999999992433,
+          "p95": 0.2337999999999738
+        }
+      }
+    },
+    {
+      "name": "motion",
+      "frames": 80,
+      "warmup": 4,
+      "expected": 80,
+      "tracked": 80,
+      "falsePositive": 0,
+      "maxCornerErrorPx": 1.5921070176985073,
+      "counts": {
+        "flowAttempts": 76,
+        "flowAccepted": 76,
+        "redetections": 9,
+        "orbExtractions": 9,
+        "flowInputPoints": 4724,
+        "cachedAttempts": 8,
+        "fullDetections": 1,
+        "matchingQueryDescriptors": 6677
+      },
+      "stages": {
+        "grayMs": {
+          "mean": 0.5786105263158082,
+          "p50": 0.4863999999997759,
+          "p95": 1.1517000000003463
+        },
+        "qualityMs": {
+          "mean": 0.12458026315791933,
+          "p50": 0.0897000000004482,
+          "p95": 0.3731999999999971
+        },
+        "opticalFlowMs": {
+          "mean": 11.231507894736865,
+          "p50": 10.880099999999402,
+          "p95": 18.449899999999616
+        },
+        "flowValidationMs": {
+          "mean": 0.5312394736842072,
+          "p50": 0.5146000000004278,
+          "p95": 0.9011000000000422
+        },
+        "orbMs": {
+          "mean": 3.118481578947365,
+          "p50": 0,
+          "p95": 27.540099999999256
+        },
+        "matchingMs": {
+          "mean": 3.215000000000002,
+          "p50": 0,
+          "p95": 9.429799999999886
+        },
+        "homographyMs": {
+          "mean": 0.06085000000001329,
+          "p50": 0,
+          "p95": 0.5735999999997148
+        },
+        "poseMs": {
+          "mean": 1.0495276315789037,
+          "p50": 0.7038000000002285,
+          "p95": 2.803899999999885
+        },
+        "workerMs": {
+          "mean": 20.291872368421053,
+          "p50": 13.815800000000309,
+          "p95": 56.54300000000012
+        },
+        "roundTripMs": {
+          "mean": 20.638377631578965,
+          "p50": 14.177500000000691,
+          "p95": 56.86229999999978
+        },
+        "transportAndSchedulingMs": {
+          "mean": 0.34650526315791513,
+          "p50": 0.3192999999996573,
+          "p95": 0.5796000000009371
+        }
+      }
+    },
+    {
+      "name": "occlusion",
+      "frames": 80,
+      "warmup": 4,
+      "expected": 76,
+      "tracked": 76,
+      "falsePositive": 0,
+      "maxCornerErrorPx": 1.5094894844757976,
+      "recovered": true,
+      "counts": {
+        "flowAttempts": 72,
+        "flowAccepted": 71,
+        "redetections": 14,
+        "orbExtractions": 14,
+        "flowInputPoints": 5083,
+        "cachedAttempts": 13,
+        "fullDetections": 5,
+        "matchingQueryDescriptors": 26473
+      },
+      "stages": {
+        "grayMs": {
+          "mean": 0.5328644736842809,
+          "p50": 0.46929999999974825,
+          "p95": 0.7681000000002314
+        },
+        "qualityMs": {
+          "mean": 0.1470710526315016,
+          "p50": 0.08840000000054715,
+          "p95": 0.2944999999999709
+        },
+        "opticalFlowMs": {
+          "mean": 9.138185526315798,
+          "p50": 8.789300000000367,
+          "p95": 14.19879999999921
+        },
+        "flowValidationMs": {
+          "mean": 0.573152631578942,
+          "p50": 0.5137000000004264,
+          "p95": 1.0052000000005137
+        },
+        "orbMs": {
+          "mean": 3.5481131578947163,
+          "p50": 0,
+          "p95": 24.978900000000067
+        },
+        "matchingMs": {
+          "mean": 3.5260565789473706,
+          "p50": 0,
+          "p95": 11.775300000000243
+        },
+        "homographyMs": {
+          "mean": 0.07246973684208283,
+          "p50": 0,
+          "p95": 0.581000000000131
+        },
+        "poseMs": {
+          "mean": 0.9914144736843044,
+          "p50": 0.7155000000002474,
+          "p95": 2.573500000000422
+        },
+        "workerMs": {
+          "mean": 18.890668421052577,
+          "p50": 11.43080000000009,
+          "p95": 51.464600000000246
+        },
+        "roundTripMs": {
+          "mean": 19.24491184210531,
+          "p50": 11.950199999999313,
+          "p95": 51.91780000000017
+        },
+        "transportAndSchedulingMs": {
+          "mean": 0.354243421052735,
+          "p50": 0.30239999999866995,
+          "p95": 0.6975999999995111
+        }
+      }
+    }
+  ],
+  "limits": "No physical camera, browser compositor, device thermals or GPU. Timings vary by host; correctness and path counts must be compared too."
+}

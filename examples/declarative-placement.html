@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,"><title>Superficie y colocación</title>
+  <style>body{margin:0;font:16px system-ui}header{padding:12px}webar-scene{height:80vh;height:80dvh;min-height:360px}</style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>iPhone y Android: inicia, desplaza la cámara sobre textura y espera el anillo. Pulsa Colocar aquí. La escala óptica es relativa.</header>
+  <webar-scene mode="slam" backend="optical-flow" placement="manual" diagnostics gestures>
+    <p>Cargando SDK… Abre mediante HTTP/HTTPS y comprueba el script actualizado.</p>
+    <webar-model src="./assets/Kai-WebAR-Facil.glb" size="0.4"></webar-model>
+  </webar-scene>
+</body>
+</html>

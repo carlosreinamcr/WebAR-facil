@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>10 · Texto escrito con SLAM</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #edf3f8; color: #142b40; font: 16px/1.45 system-ui; }
+    header { padding: 12px; } h1 { margin: 4px 0; font-size: 21px; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input { font: inherit; padding: 9px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } button:disabled { cursor: default; }
+    input[type="text"] { width: min(100%, 360px); } input[type="range"] { width: min(100%, 320px); }
+    webar-scene { display: block; height: 65vh; height: 65dvh; min-height: 320px; }
+  </style>
+  <!-- 1. Un solo SDK: incluye Three.js, loaders, componentes y controles de cámara.
+       Esta ruta es para examples/PRUEBAS. El build la adapta en dist/examples/PRUEBAS.
+       Servir con HTTP/HTTPS; en el teléfono utiliza HTTPS. -->
+  <script defer src="../../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería de ejemplos</a>
+    <h1>10. Texto escrito con SLAM</h1>
+  <p class="example-documentation" data-doc-en="recipes-programmatic.html#editable-text-in-ar"><a href="../../docs/recipes-programmatic.html#texto-editable-en-realidad-aumentada">Cómo desarrollar este ejemplo</a></p>
+    <p>El campo se dibuja en una textura de Three.js y se coloca en el espacio AR; no es una etiqueta HTML pegada a la pantalla. En odometría la escala es relativa: ajusta size/width si el contenido queda pequeño.</p>
+    <p>Mueve lentamente el teléfono sobre una zona con textura. Cuando aparezca el anillo, pulsa «Colocar aquí». La escala óptica es relativa.</p>
+    <form id="text-form">
+      <label>Texto <input id="text" type="text" maxlength="50" value="Hola, realidad aumentada"></label>
+      <button type="submit" disabled>Mostrar texto</button>
+    </form>
+    <p id="message" role="status">Pulsa «Iniciar AR» en la escena.</p>
+  </header>
+  <!-- 2. La escena crea el visor y los botones Iniciar AR / Detener.
+       Los cambios de contenido no requieren abrir otra cámara. -->
+  <webar-scene id="ar" mode="slam" backend="optical-flow" placement="manual" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa la ruta del script y que hayas ejecutado npm run build.</p>
+      <!-- El texto se añade con app.addContent después de ar-ready. -->
+  </webar-scene>
+  <script>
+    // 3. DOMContentLoaded espera también al SDK cargado con defer.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar');
+      const message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const { THREE } = WebARFacil;
+      const form = document.querySelector('#text-form'), input = document.querySelector('#text');
+      const button = form.querySelector('button');
+      let texture = null, material = null, sprite = null, offRender = () => {};
+
+      function drawText() {
+        if (!texture) return;
+        const canvas = texture.image, context = canvas.getContext('2d');
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = 'rgba(10, 30, 50, 0.88)';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        const text = input.value.trim() || 'Hola, realidad aumentada';
+        let fontSize = 84;
+        do { context.font = `bold ${fontSize--}px system-ui`; }
+        while (context.measureText(text).width > canvas.width - 64 && fontSize > 12);
+        context.fillStyle = '#ffffff'; context.textAlign = 'center'; context.textBaseline = 'middle';
+        context.fillText(text, canvas.width / 2, canvas.height / 2);
+        texture.needsUpdate = true; // Reutilizar la textura al escribir; sin nuevas descargas.
+      }
+      function releaseText() {
+        button.disabled = true; offRender(); offRender = () => {};
+        sprite?.removeFromParent(); material?.dispose(); texture?.dispose();
+        sprite = null; material = null; texture = null;
+      }
+      form.onsubmit = event => { event.preventDefault(); drawText(); };
+      scene.addEventListener('ar-stopped', releaseText);
+      scene.addEventListener('ar-ready', () => {
+        releaseText();
+        const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 256;
+        texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+        material = new THREE.SpriteMaterial({ map: texture, transparent: true, toneMapped: false });
+        sprite = new THREE.Sprite(material); sprite.name = 'texto-del-usuario';
+        sprite.position.set(0, 0.8, 0); sprite.scale.set(3.2, 0.8, 1);
+        // CanvasTexture + Sprite muestran texto sin cargar fuentes 3D externas.
+        // El Sprite mira a la cámara; el anchor sigue siendo responsabilidad del SDK.
+        scene.app.addContent('default', sprite);
+        const anchor = scene.app.getAnchor('default');
+        // Contenido Three.js propio: respetar también la colocación manual y sus pérdidas.
+        offRender = scene.app.onRender(() => { anchor.visible = scene.placementState === 'placed'; });
+        button.disabled = false; drawText();
+        message.textContent = 'Escribe y pulsa Mostrar texto. El texto permanece vinculado al anchor.';
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es"><head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,"><title>WebAR Fácil · 31 ejemplos</title>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #edf3f8; color: #142b40; font: 16px/1.45 system-ui; }
+    header { padding: 12px; } h1 { margin: 4px 0; font-size: 21px; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input { font: inherit; padding: 9px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } button:disabled { cursor: default; }
+    input[type="text"] { width: min(100%, 360px); } input[type="range"] { width: min(100%, 320px); }
+    webar-scene { display: block; height: 65vh; height: 65dvh; min-height: 320px; }
+main{max-width:850px;margin:auto;padding:18px}li{margin:12px 0}</style></head>
+<body><main><h1>31 ejemplos de WebAR Fácil</h1>
+<p>Abre mediante el servidor del proyecto. En móviles utiliza HTTPS y permite la cámara.
+Cada HTML contiene sus propios comentarios y código; solo comparte el SDK y la carpeta assets.</p>
+<p><a href="./assets/marcador.png" target="_blank" rel="noopener">Mostrar el marcador</a> en otra pantalla o imprimirlo a 20 cm de ancho.
+Los nuevos ejemplos 14–25 usan ../assets/marcador.jpg y ../assets/marcador2.jpg; los primeros trece conservan sus rutas.</p>
+<p>Los ejemplos 07–13 usan odometría óptica sin marcador: desplaza la cámara sobre textura y pulsa Colocar aquí.
+La escala es relativa; no es una reconstrucción completa ni se garantiza ausencia de deriva.</p>
+<ol>
+      <li><a href="./01-modelo-marcador.html">01. Modelo GLB con marcador</a></li>
+      <li><a href="./02-gestos-marcador.html">02. Mover, girar y escalar con marcador</a></li>
+      <li><a href="./03-cambiar-modelo-marcador.html">03. Dos botones para cambiar el GLB con marcador</a></li>
+      <li><a href="./04-texto-marcador.html">04. Texto escrito sobre el marcador</a></li>
+      <li><a href="./05-video-marcador.html">05. Vídeo MP4 con marcador</a></li>
+      <li><a href="./06-iluminacion-marcador.html">06. Mover la iluminación con marcador</a></li>
+      <li><a href="./07-modelo-slam.html">07. Modelo GLB con SLAM óptico</a></li>
+      <li><a href="./08-gestos-slam.html">08. Mover, girar y escalar con SLAM</a></li>
+      <li><a href="./09-cambiar-modelo-slam.html">09. Dos botones para cambiar el GLB con SLAM</a></li>
+      <li><a href="./10-texto-slam.html">10. Texto escrito con SLAM</a></li>
+      <li><a href="./11-video-slam.html">11. Vídeo MP4 con SLAM</a></li>
+      <li><a href="./12-iluminacion-slam.html">12. Mover la iluminación con SLAM</a></li>
+      <li><a href="./13-mapas-locales.html">13. Guardar, recuperar y borrar un mapa local</a></li>
+      <li><a href="./14-varios-marcadores.html">14. Varios marcadores independientes</a></li>
+      <li><a href="./15-animaciones-glb.html">15. Elegir animaciones de un GLB</a></li>
+      <li><a href="./16-video-chroma.html">16. MP4 con chroma key ajustable</a></li>
+      <li><a href="./17-archivos-del-usuario.html">17. Elegir imagen y GLB desde el dispositivo</a></li>
+      <li><a href="./18-perdida-y-retencion.html">18. Tolerancia y retención al perder el marcador</a></li>
+      <li><a href="./19-seleccionar-partes.html">19. Tocar partes del modelo</a></li>
+      <li><a href="./20-catalogo-colores.html">20. Catálogo y variantes de color</a></li>
+      <li><a href="./21-imagen-a-espacio.html">21. Del marcador al seguimiento espacial</a></li>
+      <li><a href="./22-webxr-nativo.html">22. WebXR nativo con hit-test</a></li>
+      <li><a href="./23-comparar-rendimiento.html">23. Comparar perfiles de rendimiento</a></li>
+      <li><a href="./24-contenido-compuesto.html">24. Modelo, texto y vídeo en un marcador</a></li>
+      <li><a href="./25-aframe.html">25. Integración con A-Frame</a></li>
+      <li><a href="./26-colocacion-con-mira.html">26. Colocación con mira y cuadrícula local</a></li>
+      <li><a href="./27-pantalla-completa.html">27. Pantalla completa, foto y vídeo</a></li>
+      <li><a href="./28-escala-metrica.html">28. Escala métrica experimental</a></li>
+      <li><a href="./29-threejs.html">29. Three.js con renderer propio</a></li>
+  <li><a href="./30-explorar-superficies.html">30. Explora superficies y toca para colocar</a></li>
+  <li><a href="./31-reconocer-celular.html">31. Reconoce un celular y muestra a Kai</a></li>
+</ol><p>Para editar: cambia ./assets/robot.glb, ./assets/cohete.glb, ./assets/marcador.png o ./assets/video.mp4 dentro de cada HTML.
+No necesitas generar .dat/JSON manualmente ni descargar scripts de terceros.</p></main></body></html>

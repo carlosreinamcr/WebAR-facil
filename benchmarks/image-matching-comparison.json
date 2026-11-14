@@ -1,0 +1,111 @@
+{
+  "beforeBuild": "7e52a3fa6b95a911",
+  "afterBuild": "e401853b4ff23679",
+  "createdAt": "2026-11-09T23:00:06.371Z",
+  "environment": {
+    "node": "v24.14.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "fixture": "Synthetic projected marker (sparse), actual Worker/OpenCV WASM, 640x480; 4 warm-up frames excluded from timings in each case",
+  "cases": [
+    {
+      "name": "sparse-static",
+      "workerMeanMs": {
+        "before": 10.676546052631588,
+        "after": 8.598848684210541
+      },
+      "workerP95Ms": {
+        "before": 18.544899999999984,
+        "after": 17.515800000000013
+      },
+      "tracked": {
+        "before": 80,
+        "after": 80,
+        "expected": 80
+      },
+      "maxCornerErrorPx": {
+        "before": 1.3274541552727288,
+        "after": 1.3274541552727288
+      },
+      "falsePositives": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "name": "sparse-140ms",
+      "workerMeanMs": {
+        "before": 17.737319736842142,
+        "after": 12.008023684210528
+      },
+      "workerP95Ms": {
+        "before": 75.65449999999964,
+        "after": 30.735400000000027
+      },
+      "tracked": {
+        "before": 80,
+        "after": 80,
+        "expected": 80
+      },
+      "maxCornerErrorPx": {
+        "before": 1.3274541552727288,
+        "after": 1.3274541552727288
+      },
+      "falsePositives": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "name": "sparse-motion",
+      "workerMeanMs": {
+        "before": 10.908778947368463,
+        "after": 8.716248684210498
+      },
+      "workerP95Ms": {
+        "before": 18.69800000000032,
+        "after": 17.44549999999981
+      },
+      "tracked": {
+        "before": 80,
+        "after": 80,
+        "expected": 80
+      },
+      "maxCornerErrorPx": {
+        "before": 3.517655335953169,
+        "after": 3.517655335953169
+      },
+      "falsePositives": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "name": "sparse-occlusion",
+      "workerMeanMs": {
+        "before": 13.051086842105297,
+        "after": 9.570606578947372
+      },
+      "workerP95Ms": {
+        "before": 76.60980000000018,
+        "after": 30.355199999999968
+      },
+      "tracked": {
+        "before": 76,
+        "after": 76,
+        "expected": 76
+      },
+      "maxCornerErrorPx": {
+        "before": 4.189200910597866,
+        "after": 4.189200910597866
+      },
+      "falsePositives": {
+        "before": 0,
+        "after": 0
+      },
+      "recovered": true
+    }
+  ],
+  "limits": "No physical camera, browser compositor, device thermals or GPU. Timings vary by host; correctness and path counts must be compared too."
+}

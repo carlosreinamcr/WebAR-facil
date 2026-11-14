@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="webar-sdk-build" content="__WEBAR_BUILD__">
+  <link rel="icon" href="data:,"><title>Pruebas iPhone y Android</title>
+  <style>
+    body{margin:0;background:#edf3f8;color:#142b40;font:15px/1.5 system-ui}header,section{max-width:1100px;margin:auto;padding:16px}h1{margin:0}label{display:inline-block;margin:6px}input,select,button{font:inherit;padding:8px;max-width:100%}button{cursor:pointer}webar-scene{height:65vh;height:65dvh;min-height:400px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #c8d7e2;padding:9px;text-align:left;vertical-align:top}td input{width:95%;box-sizing:border-box}.table{overflow:auto}#metrics{background:#102a43;color:white;padding:12px;white-space:pre-wrap}a{color:#075ea8}
+    @media(max-width:650px){header,section{padding:10px}td,th{padding:6px;font-size:13px}webar-scene{height:60vh;height:60dvh}}
+  </style>
+  <script defer src="../dist/webar-facil.min.js?build=__WEBAR_BUILD__"></script>
+</head>
+<body>
+  <header>
+    <h1>Pruebas en iPhone y Android</h1>
+    <button id="start-camera" type="button" onclick="document.querySelector('#message').textContent='El SDK aún se está cargando. Espera a que aparezca su versión y vuelve a pulsar.'">Iniciar cámara</button>
+    <button id="start-flow" type="button" onclick="document.querySelector('#message').textContent='El SDK aún se está cargando. Espera a que aparezca su versión y vuelve a pulsar.'">Probar SLAM sin marcador</button>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. <a href="../marker.png" target="_blank" rel="noopener">Mostrar marcador en otra pantalla</a>.</p>
+    <p id="sdk-info" role="status">Cargando SDK…</p>
+    <p id="sdk-notice" role="status" hidden></p>
+    <p id="mode-guide">Modo marcador: apunta a la imagen de referencia.</p>
+    <p>El mismo protocolo para ambos sistemas. No se aprueba ninguna prueba automáticamente. Abre por HTTPS en el teléfono.</p>
+    <label>Plataforma <select id="platform"><option value="other">Seleccionar</option><option value="ios">iPhone/iPad</option><option value="android">Android</option><option value="desktop">Computador</option></select></label>
+    <label>Modelo del dispositivo <input id="device" placeholder="Ej. modelo exacto de iPhone o Android"></label>
+    <label>SO y versión <input id="os" placeholder="Versión exacta"></label>
+    <label>Navegador y versión <input id="browser" placeholder="Versión exacta"></label>
+    <label><input id="physical" type="checkbox">Estoy probando un dispositivo físico</label>
+    <div>
+      <label>Modo <select id="mode"><option value="image">Marcador</option><option value="flow">Odometría sin marcador</option><option value="transition">Imagen → odometría</option><option value="webxr">WebXR nativo si está disponible</option></select></label>
+      <label>Contenido <select id="media"><option value="plain">GLB normal</option><option value="draco">Draco</option><option value="meshopt">Meshopt</option><option value="video">MP4 con chroma</option></select></label>
+      <label>Perfil de cámara <select id="performance"><option value="auto">Automático</option><option value="battery">Ahorro</option><option value="balanced">Equilibrado</option><option value="quality">Más detalle</option></select></label>
+      <label>Resolución de render <select id="pixel-ratio"><option value="2">Hasta 2× (actual)</option><option value="1">Hasta 1× (comparar)</option><option value="1.5">Hasta 1.5×</option></select></label>
+      <label><input id="antialias" type="checkbox" checked>Antialiasing</label>
+      <button id="configure">Aplicar configuración</button><button id="export">Descargar informe de pruebas</button>
+    </div>
+  </header>
+  <webar-scene diagnostics gestures>
+    <p>Cargando SDK… Comprueba ruta y build actualizado. No abras con file://.</p>
+    <webar-target src="../marker.png" target-id="poster"><webar-model src="../models/demo-plain.glb" size="0.3"></webar-model></webar-target>
+  </webar-scene>
+  <section>
+    <div id="metrics">Aún no hay una sesión registrada.</div>
+    <p id="timer" role="status">Selecciona un paso para ver sus instrucciones. El temporizador no determina el resultado.</p>
+    <div class="table"><table><thead><tr><th>Paso</th><th>Resultado manual</th><th>Notas</th></tr></thead><tbody id="steps"></tbody></table></div>
+    <p>Exportación local: sin imágenes, mapas, matrices, URLs de contenido ni IDs de cámara. Incluye user-agent, campos que escribas, métricas y observaciones. No se sube a un servicio.</p>
+  </section>
+  <script>
+    addEventListener('DOMContentLoaded',()=>{
+      const scene=document.querySelector('webar-scene'),message=document.querySelector('#message'),steps=document.querySelector('#steps');
+      const sdk=globalThis.WebARFacil;
+      if(!sdk?.DEVICE_TEST_PROTOCOL||typeof scene.getDiagnosticsReport!=='function'){
+        const reason=location.protocol==='file:'?'Este archivo necesita abrirse desde el servidor HTTP/HTTPS del proyecto.':'No cargó el script del SDK o no ofrece las APIs requeridas.';
+        const showLoadError=()=>{document.querySelector('#sdk-info').textContent='SDK no disponible o incompatible.';message.textContent=reason+' No se ha solicitado cámara. Comprueba que el script de la librería se sirva desde la carpeta indicada en este HTML.';};
+        showLoadError();for(const id of ['start-camera','start-flow','configure'])document.querySelector('#'+id).onclick=showLoadError;return;
+      }
+      const {DEVICE_TEST_PROTOCOL,LIBRARY_VERSION,LIBRARY_BUILD}=sdk;
+      const expected=document.querySelector('meta[name="webar-sdk-build"]').content;
+      const buildMismatch=/^[a-f0-9]{16}$/.test(expected)&&expected!==LIBRARY_BUILD;
+      document.querySelector('#sdk-info').textContent=`SDK ${LIBRARY_VERSION} · ${LIBRARY_BUILD}`;
+      if(buildMismatch){
+        const notice=document.querySelector('#sdk-notice');notice.hidden=false;
+        notice.textContent=`La página espera el SDK ${expected}, pero cargó ${LIBRARY_BUILD}. Puedes iniciar la cámara con el SDK compatible cargado. Para medir las últimas optimizaciones, actualiza la distribución completa; el diagnóstico identifica la compilación realmente utilizada.`;
+      }
+      let activeMode='image',activeMedia='plain',timer=null,configurationJob=null,startJob=null;
+      let appliedKey=JSON.stringify({mode:'image',media:'plain',performance:'auto',ratio:'2',antialias:true});
+      const selection=()=>({mode:document.querySelector('#mode').value,media:document.querySelector('#media').value,performance:document.querySelector('#performance').value,ratio:document.querySelector('#pixel-ratio').value,antialias:document.querySelector('#antialias').checked});
+      const showError=error=>{message.textContent=error instanceof Error?error.message:String(error);};
+      const setBusy=()=>{document.querySelector('#configure').disabled=!!configurationJob;for(const id of ['start-camera','start-flow']){const button=document.querySelector('#'+id);button.disabled=false;button.setAttribute('aria-busy',String(!!configurationJob||!!startJob));}};
+      function explainMode(){
+        const instructions={image:'Modo marcador: apunta a la imagen de referencia.',flow:'SLAM óptico sin marcador: desplaza lentamente la cámara sobre una zona con textura. Espera el anillo y pulsa Colocar aquí. La escala es relativa.',transition:'Transición: primero reconoce el marcador; después pulsa Activar SLAM para conservar su posición en el mapa local.',webxr:'WebXR nativo sin marcador: inicia la cámara y pulsa Activar SLAM. Selecciona una superficie dentro de la sesión XR; requiere soporte del navegador.'};
+        document.querySelector('#mode-guide').textContent=instructions[activeMode];
+        document.querySelector('#start-camera').textContent=activeMode==='flow'?'Iniciar SLAM sin marcador':activeMode==='webxr'?'Iniciar cámara para WebXR':'Iniciar cámara';
+      }
+      const reports=new Map(),results=new Map();
+      const context=()=>({platform:document.querySelector('#platform').value,execution:navigator.webdriver?'automated':document.querySelector('#physical').checked?'physical-user-reported':'unspecified',deviceModel:document.querySelector('#device').value.slice(0,160),osVersion:document.querySelector('#os').value.slice(0,160),browserVersion:document.querySelector('#browser').value.slice(0,160),scenario:activeMode+':'+activeMedia});
+      // También conservar los datos del operador si el permiso falla antes de ar-ready.
+      function updateContext(){const report=scene.getDiagnosticsReport();if(report&&(report.recording||!report.context.scenario))scene.diagnostics.setContext(context());}
+      function remember(){updateContext();const report=scene.getDiagnosticsReport();if(report){reports.set(report.createdAt,report);if(reports.size>16)reports.delete(reports.keys().next().value);}}
+      function renderSteps(){
+        steps.replaceChildren();
+        for(const test of DEVICE_TEST_PROTOCOL.filter(test=>test.modes.includes(activeMode))){
+          const key=activeMode+':'+test.id,current=results.get(key)??{testId:test.id,scenario:activeMode,result:'pending',notes:''};results.set(key,current);
+          const row=document.createElement('tr'),name=document.createElement('td'),result=document.createElement('td'),notes=document.createElement('td'),button=document.createElement('button');
+          button.textContent=test.title;button.onclick=()=>{
+            updateContext();scene.diagnostics?.mark('test-start',test.id);if(timer)clearInterval(timer);
+            const start=performance.now();const draw=()=>{const remaining=Math.max(0,Math.ceil(test.seconds-(performance.now()-start)/1000));document.querySelector('#timer').textContent=`${test.title}: ${test.instructions} · ${remaining}s. Evalúa y marca el resultado manualmente.`;if(!remaining){clearInterval(timer);timer=null;}};draw();timer=setInterval(draw,250);
+          };name.append(button);
+          const select=document.createElement('select');select.setAttribute('aria-label','Resultado '+test.title);
+          for(const[value,label]of [['pending','Pendiente'],['pass','Aprobado por operador'],['fail','Falló'],['not-supported','No compatible']]){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);}select.value=current.result;
+          const input=document.createElement('input');input.setAttribute('aria-label','Notas '+test.title);input.value=current.notes;
+          const save=()=>{current.result=select.value;current.notes=input.value.slice(0,500);results.set(key,current);updateContext();if(scene.getDiagnosticsReport()?.recording)scene.diagnostics.observe(test.id,current.result,current.notes);};select.onchange=save;input.onchange=save;
+          result.append(select);notes.append(input);row.append(name,result,notes);steps.append(row);
+        }
+      }
+      scene.addEventListener('ar-ready',()=>{updateContext();explainMode();message.textContent=activeMode==='flow'?'SLAM óptico iniciado sin marcador. Mueve la cámara sobre textura; coloca el contenido cuando aparezca el anillo.':activeMode==='webxr'?'Cámara preparada para WebXR. Pulsa Activar SLAM para solicitar la sesión nativa.':activeMode==='transition'?'Busca el marcador y después pulsa Activar SLAM.':'Sesión de marcador preparada. Apunta a la imagen de referencia.';});
+      scene.addEventListener('ar-status',event=>{const phases={'camera-requesting':'Solicitud enviada al navegador. Esperando permiso de cámara…','camera-granted':'Permiso concedido. El dispositivo entregó un stream de cámara.','camera-playing':'Stream recibido. Iniciando reproducción del vídeo…','camera-ready':'Cámara activa. Preparando contenido y seguimiento…'};if(phases[event.detail.message])message.textContent=phases[event.detail.message];});
+      scene.addEventListener('modelLoaded',updateContext);scene.addEventListener('videoLoaded',updateContext);
+      scene.addEventListener('ar-error',event=>{message.textContent=event.detail.message;});
+      scene.addEventListener('ar-stopped',()=>{remember();if(!configurationJob)message.textContent='Cámara detenida. Puedes volver a iniciar.';});
+      for(const id of ['device','os','browser','physical','platform'])document.querySelector('#'+id).addEventListener('change',updateContext);
+      function applyConfiguration(force=false){
+        if(configurationJob)return configurationJob;
+        if(!force&&JSON.stringify(selection())===appliedKey)return Promise.resolve();
+        configurationJob=(async()=>{
+          await scene.stop();remember();
+          // Leer después del cierre: si el usuario cambia varias opciones mientras
+          // termina una sesión, aplicar la última selección completa.
+          const selected=selection();activeMode=selected.mode;activeMedia=selected.media;
+          scene.setAttribute('pixel-ratio',selected.ratio);scene.setAttribute('antialias',String(selected.antialias));
+          scene.setAttribute('performance',selected.performance);
+          scene.removeAttribute('slam');scene.removeAttribute('mode');scene.removeAttribute('backend');scene.removeAttribute('placement');
+          const content=document.createElement(activeMedia==='video'?'webar-video':'webar-model');
+          if(activeMedia==='video'){content.setAttribute('src','../videos/demo-chroma.mp4');content.setAttribute('chroma-key','');content.setAttribute('orientation','upright');content.setAttribute('width','0.3');}
+          else{content.setAttribute('src',`../models/demo-${activeMedia}.glb`);content.setAttribute('size','0.3');}
+          if(activeMode==='flow'||activeMode==='webxr'){scene.setAttribute('mode','slam');scene.setAttribute('backend',activeMode==='flow'?'optical-flow':'webxr');scene.setAttribute('placement','manual');scene.replaceChildren(content);}
+          else{const target=document.createElement('webar-target');target.setAttribute('src','../marker.png');target.setAttribute('target-id','poster');target.append(content);scene.replaceChildren(target);if(activeMode==='transition'){scene.setAttribute('slam','');scene.setAttribute('backend','optical-flow');}}
+          appliedKey=JSON.stringify(selected);if(timer){clearInterval(timer);timer=null;}document.querySelector('#timer').textContent='Selecciona un paso para ver sus instrucciones.';
+          renderSteps();explainMode();message.textContent='Configuración aplicada. '+document.querySelector('#mode-guide').textContent;
+        })().finally(()=>{configurationJob=null;setBusy();});
+        setBusy();return configurationJob;
+      }
+      function startScene(){
+        if(startJob){message.textContent='El inicio sigue en curso. Puedes detenerlo desde la escena.';return startJob;}
+        // Con configuración lista, invocar directamente la API pública desde el
+        // click; no interceptar ni sustituir el botón nativo del componente.
+        const ready=configurationJob||JSON.stringify(selection())!==appliedKey?applyConfiguration():null;
+        message.textContent='Solicitando inicio de cámara…';
+        const begin=()=>scene.start();
+        try{
+          const task=ready?ready.then(begin):begin();
+          startJob=task.then(()=>{scene.scrollIntoView({block:'start'});}).catch(error=>{if(error?.name!=='AbortError')showError(error);}).finally(()=>{startJob=null;setBusy();});
+          setBusy();return startJob;
+        }catch(error){showError(error);setBusy();return Promise.resolve();}
+      }
+      document.querySelector('#configure').onclick=()=>{void applyConfiguration(true).catch(showError);};
+      for(const id of ['mode','media','performance','pixel-ratio','antialias'])document.querySelector('#'+id).addEventListener('change',()=>{void applyConfiguration().catch(showError);});
+      document.querySelector('#start-camera').onclick=()=>{void startScene();};
+      document.querySelector('#start-flow').onclick=()=>{document.querySelector('#mode').value='flow';void startScene();};
+      document.querySelector('#export').onclick=()=>{
+        remember();
+        if(!reports.size){message.textContent='Inicia una sesión para registrar diagnóstico antes de exportar.';return;}
+        const suite={schemaVersion:1,kind:'webar-device-test-suite',sdk:{version:LIBRARY_VERSION,build:LIBRARY_BUILD},createdAt:new Date().toISOString(),context:scene.getDiagnosticsReport().context,reports:[...reports.values()],results:[...results.values()],limits:{retainedSessions:16,physicalValidation:'operator-declared, not independently certified'}};
+        const url=URL.createObjectURL(new Blob([JSON.stringify(suite,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='webar-device-tests.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      };
+      renderSteps();explainMode();void applyConfiguration().catch(showError);
+      setInterval(()=>{const report=scene.getDiagnosticsReport();if(!report)return;document.querySelector('#metrics').textContent=`Última sesión registrada: ${report.context.scenario} · ${report.recording?'activa':'detenida'}\nSDK ${report.sdk.version}/${report.sdk.build}\nEstado: ${report.state} · Poses: ${report.poses.count}\nPerfil: ${report.configuration.performance??'anterior'} · Análisis: ${report.metrics.latestCamera?.analysisWidth??'?'}×${report.metrics.latestCamera?.analysisHeight??'?'}\nCámara: ${report.camera.width??'?'}×${report.camera.height??'?'}\nProcesamiento p95: ${report.metrics.processingMs.p95?.toFixed(1)??'?'} ms · Relocalizaciones: ${report.poses.relocalized}\nWorker p95: ${report.tracking?.stages.workerMs.p95?.toFixed(1)??'?'} ms · LK: ${report.tracking?.stages.opticalFlowMs.p95?.toFixed(1)??'?'} ms · Matching: ${report.tracking?.stages.matchingMs.p95?.toFixed(1)??'?'} ms\nMatching: ${report.tracking?.paths.exactMatchingCalls??0} WASM exacto · ${report.tracking?.paths.opencvMatchingCalls??0} OpenCV · ${report.tracking?.paths.emptyMatchingCalls??0} vacíos\nSoporte LK fiable: ${report.tracking?.paths.flowReliable??0} · Con 12–23 puntos: ${report.tracking?.paths.flowSparseReliable??0} · Globales evitadas tras verificación: ${report.tracking?.paths.globalDeferred??0}\nRutas: ${report.tracking?.paths.flowAttempts??0} flujo · ${report.tracking?.paths.cachedAttempts??0} caché · ${report.tracking?.paths.fullDetections??0} búsquedas globales\nRender anterior: ${report.renderer?.latest?.drawCalls??'?'} llamadas · ${report.renderer?.latest?.triangles??'?'} triángulos\nBuffer: ${report.renderer?.latest?.drawingBufferWidth??'?'}×${report.renderer?.latest?.drawingBufferHeight??'?'} · Texturas: ${report.renderer?.latest?.textures??'?'}\nLas métricas no equivalen a precisión física ni a FPS de GPU.`;},1000);
+    });
+  </script>
+</body>
+</html>

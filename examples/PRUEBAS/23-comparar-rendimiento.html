@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>23. Comparar perfiles de rendimiento</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>23. Comparar perfiles de rendimiento</h1>
+  <p class="example-documentation" data-doc-en="camera-performance.html"><a href="../../docs/camera-performance.html#perfiles-sin-listas-de-dispositivos">Cómo desarrollar este ejemplo</a></p>
+    <p>Compara el mismo recorrido con distintos perfiles. Cambiar perfil o modo reinicia la sesión; los tiempos no demuestran por sí solos igual precisión.</p>
+    <p><a href="../assets/marcador.jpg" target="_blank" rel="noopener">Abrir marcador</a> en otra pantalla o imprimirlo.</p>
+    <label>Perfil <select id="profile"><option>auto</option><option>battery</option><option>balanced</option><option>quality</option></select></label>
+    <label>Modo <select id="mode"><option value="image">Marcador</option><option value="slam">Odometría óptica</option></select></label>
+    <button id="apply-profile" type="button">Aplicar e iniciar</button>
+    <button id="download" type="button">Descargar comparaciones</button>
+    <pre id="metrics">Sin medición.</pre>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+    <!-- El JPG se compila automáticamente; 0.2 es el ancho impreso en metros. -->
+    <webar-target src="../assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model id="model" src="../assets/robot.glb" size="0.2"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const runs = new Map();
+      function remember() {
+        const report = scene.getDiagnosticsReport();
+        if (report) runs.set(report.createdAt, report);
+        if (runs.size > 16) runs.delete(runs.keys().next().value);
+      }
+      scene.addEventListener('ar-stopped', remember);
+      document.querySelector('#apply-profile').onclick = async event => {
+        event.target.disabled = true;
+        try {
+          await scene.stop(); remember();
+          scene.setAttribute('performance', document.querySelector('#profile').value);
+          const mode = document.querySelector('#mode').value;
+          scene.setAttribute('mode', mode);
+          const content = document.createElement('webar-model');
+          content.setAttribute('src', '../assets/robot.glb'); content.setAttribute('size', mode === 'slam' ? '3' : '0.2');
+          if (mode === 'slam') {
+            scene.setAttribute('backend', 'optical-flow'); scene.setAttribute('placement', 'manual'); scene.replaceChildren(content);
+          } else {
+            scene.removeAttribute('backend'); scene.removeAttribute('placement');
+            const target = document.createElement('webar-target'); target.setAttribute('src', '../assets/marcador.jpg'); target.setAttribute('target-id', 'poster'); target.append(content); scene.replaceChildren(target);
+          }
+          await scene.start();
+        } catch (error) { message.textContent = error.message; }
+        finally { event.target.disabled = false; }
+      };
+      setInterval(() => {
+        const report = scene.getDiagnosticsReport(), sample = report?.metrics.latestCamera;
+        if (!report || !sample) return;
+        document.querySelector('#metrics').textContent =
+          `Perfil registrado: ${report.configuration.performance}; modo: ${report.configuration.mode}
+` +
+          `Captura: ${report.camera.width}×${report.camera.height}; análisis: ${sample.analysisWidth}×${sample.analysisHeight}
+` +
+          `Procesamiento medio: ${report.metrics.processingMs.mean?.toFixed(1)} ms; p95: ${report.metrics.processingMs.p95?.toFixed(1)} ms
+` +
+          `Lectura media: ${report.metrics.readbackMs.mean?.toFixed(1)} ms; poses: ${report.poses.count}
+` +
+          'No mide temperatura, consumo eléctrico ni tiempo de GPU.';
+      }, 500);
+      document.querySelector('#download').onclick = () => {
+        remember(); if (!runs.size) { message.textContent = 'Inicia al menos una sesión.'; return; }
+        const url = URL.createObjectURL(new Blob([JSON.stringify({ kind: 'webar-profile-comparison', reports: [...runs.values()] }, null, 2)], { type: 'application/json' }));
+        const link = document.createElement('a'); link.href = url; link.download = 'comparacion-perfiles.json'; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+    });
+  </script>
+</body>
+</html>

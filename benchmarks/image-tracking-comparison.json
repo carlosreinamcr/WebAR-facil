@@ -1,0 +1,111 @@
+{
+  "beforeBuild": "ed7b38c9a9005dd2",
+  "afterBuild": "aef4ddad324066a2",
+  "createdAt": "2026-11-09T21:40:09.931Z",
+  "environment": {
+    "node": "v24.14.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "fixture": "Synthetic projected marker, actual Worker/OpenCV WASM, 640x480; 4 warm-up frames excluded from timings in each case",
+  "cases": [
+    {
+      "name": "steady-33ms",
+      "workerMeanMs": {
+        "before": 19.558647368421056,
+        "after": 9.365832894736833
+      },
+      "workerP95Ms": {
+        "before": 118.72600000000011,
+        "after": 26.1420999999998
+      },
+      "tracked": {
+        "before": 80,
+        "after": 80,
+        "expected": 80
+      },
+      "maxCornerErrorPx": {
+        "before": 1.711670753923885,
+        "after": 1.1655506485478209
+      },
+      "falsePositives": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "name": "steady-140ms",
+      "workerMeanMs": {
+        "before": 37.49523421052635,
+        "after": 11.527131578947385
+      },
+      "workerP95Ms": {
+        "before": 223.39059999999972,
+        "after": 28.34900000000016
+      },
+      "tracked": {
+        "before": 80,
+        "after": 80,
+        "expected": 80
+      },
+      "maxCornerErrorPx": {
+        "before": 1.5015524772534246,
+        "after": 1.1944747330418781
+      },
+      "falsePositives": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "name": "motion",
+      "workerMeanMs": {
+        "before": 37.054559210526456,
+        "after": 20.291872368421053
+      },
+      "workerP95Ms": {
+        "before": 212.34879999999976,
+        "after": 56.54300000000012
+      },
+      "tracked": {
+        "before": 80,
+        "after": 80,
+        "expected": 80
+      },
+      "maxCornerErrorPx": {
+        "before": 1.2406559362346665,
+        "after": 1.5921070176985073
+      },
+      "falsePositives": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "name": "occlusion",
+      "workerMeanMs": {
+        "before": 37.605225000000054,
+        "after": 18.890668421052577
+      },
+      "workerP95Ms": {
+        "before": 212.97010000000046,
+        "after": 51.464600000000246
+      },
+      "tracked": {
+        "before": 76,
+        "after": 76,
+        "expected": 76
+      },
+      "maxCornerErrorPx": {
+        "before": 1.7627259481413058,
+        "after": 1.5094894844757976
+      },
+      "falsePositives": {
+        "before": 0,
+        "after": 0
+      },
+      "recovered": true
+    }
+  ],
+  "limits": "No physical camera, browser compositor, device thermals or GPU. Timings vary by host; correctness and path counts must be compared too."
+}

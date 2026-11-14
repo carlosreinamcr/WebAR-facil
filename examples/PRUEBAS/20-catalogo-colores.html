@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>20. Catálogo y variantes de color</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>20. Catálogo y variantes de color</h1>
+  <p class="example-documentation" data-doc-en="recipes-programmatic.html#change-catalog-colors"><a href="../../docs/recipes-programmatic.html#cambiar-colores-del-catalogo">Cómo desarrollar este ejemplo</a></p>
+    <p>Cambia de producto y de color sin cerrar la cámara. Los ojos y detalles conservan sus materiales.</p>
+    <p><a href="../assets/marcador.jpg" target="_blank" rel="noopener">Abrir marcador</a> en otra pantalla o imprimirlo.</p>
+    <label>Producto <select id="product" disabled><option value="robot.glb">Robot</option><option value="cohete-catalogo.glb">Cohete</option></select></label>
+    <label>Color del cuerpo <input id="color" type="color" value="#20c4bb" disabled></label>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+    <!-- El JPG se compila automáticamente; 0.2 es el ancho impreso en metros. -->
+    <webar-target src="../assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model id="model" src="../assets/robot.glb" size="0.2"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const model = document.querySelector('#model'), product = document.querySelector('#product'), color = document.querySelector('#color');
+      function recolor() {
+        if (!model.model) return;
+        model.model.traverse(object => {
+          // Cambia estos nombres si tu GLB utiliza otra organización de piezas.
+          if (!['cuerpo', 'fusaje', 'fuselaje'].some(name => object.name.includes(name)) || !object.material) return;
+          for (const material of Array.isArray(object.material) ? object.material : [object.material]) material.color?.set(color.value);
+        });
+      }
+      scene.addEventListener('ar-ready', () => { product.disabled = false; color.disabled = false; recolor(); });
+      scene.addEventListener('ar-stopped', () => { product.disabled = true; color.disabled = true; });
+      color.oninput = recolor;
+      product.onchange = async () => {
+        const app = scene.app; product.disabled = true; color.disabled = true;
+        try {
+          model.setAttribute('src', '../assets/' + product.value);
+          await model.updateComplete;
+          if (scene.app === app) recolor();
+        } catch (error) { message.textContent = error.message; }
+        finally { product.disabled = !scene.engine; color.disabled = !scene.engine; }
+      };
+    });
+  </script>
+</body>
+</html>

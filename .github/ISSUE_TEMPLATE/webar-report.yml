@@ -1,0 +1,36 @@
+name: Informe de funcionamiento
+description: Describe un resultado reproducible de la librería WebAR
+body:
+  - type: input
+    id: build
+    attributes:
+      label: Versión o build
+      placeholder: v0.1.0-alpha.6
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Modelo, sistema y navegador
+      placeholder: iPhone 17 Pro / iOS / Safari
+    validations:
+      required: true
+  - type: dropdown
+    id: scenario
+    attributes:
+      label: Escenario
+      options:
+        - Marcador con GLB
+        - Vídeo y chroma
+        - Colocación por cámara
+        - WebXR nativo
+        - Otro
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Pasos, resultado esperado y resultado observado
+      description: Si adjuntas estadísticas, revisa los campos que escribiste antes de compartirlas.
+    validations:
+      required: true

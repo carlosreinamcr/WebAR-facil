@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>17. Elegir imagen y GLB desde el dispositivo</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>17. Elegir imagen y GLB desde el dispositivo</h1>
+  <p class="example-documentation" data-doc-en="recipes-programmatic.html#use-files-picked-by-the-user"><a href="../../docs/recipes-programmatic.html#imagen-y-modelo-elegidos-por-el-usuario">Cómo desarrollar este ejemplo</a></p>
+    <p>Elige JPG/PNG y GLB desde el teléfono o computador. Los archivos permanecen locales; no se suben a un servidor.</p>
+    <p><a href="../assets/marcador.jpg" target="_blank" rel="noopener">Abrir marcador</a> en otra pantalla o imprimirlo.</p>
+    <label>Imagen <input id="image-file" type="file" accept="image/jpeg,image/png"></label>
+    <label>Modelo <input id="model-file" type="file" accept=".glb,model/gltf-binary"></label>
+    <button id="apply-files" type="button">Usar mis archivos e iniciar</button>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+    <!-- El JPG se compila automáticamente; 0.2 es el ancho impreso en metros. -->
+    <webar-target src="../assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model id="model" src="../assets/robot.glb" size="0.2"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const target = document.querySelector('webar-target'), model = document.querySelector('#model');
+      const button = document.querySelector('#apply-files');
+      let urls = [];
+      button.onclick = async () => {
+        const image = document.querySelector('#image-file').files[0];
+        const file = document.querySelector('#model-file').files[0];
+        if (!image || !file) { message.textContent = 'Selecciona una imagen y un GLB.'; return; }
+        button.disabled = true;
+        try {
+          // Detener primero: no cambiar referencias mientras el Worker compila otra imagen.
+          await scene.stop();
+          urls.forEach(url => URL.revokeObjectURL(url));
+          urls = [URL.createObjectURL(image), URL.createObjectURL(file)];
+          target.setAttribute('src', urls[0]); model.setAttribute('src', urls[1]);
+          await scene.start();
+          message.textContent = 'Tus archivos están preparados. Apunta a la imagen elegida.';
+        } catch (error) { message.textContent = error.message; }
+        finally { button.disabled = false; }
+      };
+      // Conservar URLs mientras se usan, incluso si se detiene y vuelve a iniciar.
+      addEventListener('pagehide', () => urls.forEach(url => URL.revokeObjectURL(url)));
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>14. Varios marcadores independientes</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>14. Varios marcadores independientes</h1>
+  <p class="example-documentation" data-doc-en="multiple-targets.html"><a href="../../docs/multiple-targets.html">Cómo desarrollar este ejemplo</a></p>
+    <p>Cada imagen tiene su propio ID, contenido y estado. Prueba mostrar ambas y retirar solo una.</p>
+    <p><a href="../assets/marcador.jpg" target="_blank" rel="noopener">Abrir marcador</a> en otra pantalla o imprimirlo.</p>
+    <p><a href="../assets/marcador2.jpg" target="_blank" rel="noopener">Abrir marcador 2</a></p>
+    <p id="robot-state">Robot: sin observar</p><p id="cohete-state">Cohete: sin observar</p>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+    <webar-target src="../assets/marcador.jpg" target-id="robot" physical-width="0.2">
+      <webar-model src="../assets/robot.glb" size="0.25"></webar-model>
+    </webar-target>
+    <webar-target src="../assets/marcador2.jpg" target-id="cohete" physical-width="0.2">
+      <webar-model src="../assets/cohete.glb" size="0.25"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      // Actualizar únicamente el indicador del ID que cambió; no reiniciar los modelos.
+      scene.addEventListener('targetFound', event => {
+        document.querySelector('#' + event.detail.targetId + '-state').textContent = event.detail.targetId + ': reconocido';
+      });
+      scene.addEventListener('targetLost', event => {
+        document.querySelector('#' + event.detail.targetId + '-state').textContent = event.detail.targetId + ': perdido';
+      });
+    });
+  </script>
+</body>
+</html>

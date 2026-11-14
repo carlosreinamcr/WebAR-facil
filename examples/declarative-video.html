@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,"><title>MP4 y chroma con HTML</title>
+  <style>body{margin:0;font:16px system-ui}header{padding:12px}webar-scene{height:80vh}</style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>Apunta al marcador de ejemplo. El vídeo original contiene un rectángulo rojo sobre verde.</header>
+  <webar-scene keep-content-on-lost>
+    <p>Cargando WebAR… Comprueba el script actualizado y abre mediante HTTP/HTTPS.</p>
+    <webar-target src="./assets/marcador.jpg" target-id="poster">
+      <webar-video src="./assets/VideoChroma.mp4" width="0.25" orientation="upright" chroma-key key-color="#00ff00" muted loop></webar-video>
+    </webar-target>
+  </webar-scene>
+</body>
+</html>

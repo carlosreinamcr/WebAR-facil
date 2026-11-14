@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,"><title>Gestos, animación y cambios en vivo</title>
+  <style>body{margin:0;font:16px system-ui;background:#e7eff6}header{padding:12px}button,select{padding:8px}webar-scene{height:75vh;height:75dvh}</style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <p>Arrastra el modelo para girar, pellizca con dos dedos para escalar y toca para seleccionar.</p>
+    <select id="source" disabled aria-label="Modelo">
+      <option value="./assets/Kai-WebAR-Facil.glb">Kai</option>
+      <option value="./assets/cohete.glb">Cohete</option>
+      <option value="./assets/robot.glb">Robot</option>
+    </select>
+    <button id="pause" disabled>Pausar animación</button>
+    <button id="resume" disabled>Continuar</button>
+    <label>Velocidad <input id="speed" type="range" min="0.1" max="3" step="0.1" value="1"></label>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena.</p>
+  </header>
+  <webar-scene gestures min-scale="0.1" max-scale="20" keep-content-on-lost>
+    <p>Cargando WebAR… Comprueba el script actualizado y abre mediante HTTP/HTTPS.</p>
+    <webar-target src="./assets/marcador.jpg" target-id="poster">
+      <webar-model id="model" src="./assets/Kai-WebAR-Facil.glb" size="0.25" animation-loop="pingpong"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    const scene=document.querySelector('webar-scene'),model=document.querySelector('#model'),message=document.querySelector('#message');
+    scene.addEventListener('ar-ready',()=>document.querySelectorAll('header button,header select').forEach(control=>{control.disabled=false;}));
+    scene.addEventListener('ar-stopped',()=>document.querySelectorAll('header button,header select').forEach(control=>{control.disabled=true;}));
+    scene.addEventListener('ar-select',()=>{message.textContent='Modelo seleccionado.';});
+    scene.addEventListener('ar-error',event=>{message.textContent=event.detail.message;});
+    document.querySelector('#pause').onclick=()=>model.setAttribute('animation-paused','');
+    document.querySelector('#resume').onclick=()=>model.removeAttribute('animation-paused');
+    document.querySelector('#speed').oninput=event=>model.setAttribute('animation-speed',event.currentTarget.value);
+    document.querySelector('#source').onchange=async event=>{
+      event.currentTarget.disabled=true;
+      try{model.setAttribute('src',event.currentTarget.value);await model.updateComplete;message.textContent='Modelo cambiado sin cerrar la cámara.';}
+      catch(error){message.textContent=error.message;}
+      finally{document.querySelector('#source').disabled=!scene.engine;}
+    };
+  </script>
+</body>
+</html>

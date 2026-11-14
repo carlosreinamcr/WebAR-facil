@@ -1,0 +1,27 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calibrar cámara · WebAR</title>
+<style>body{font:16px system-ui;max-width:1000px;margin:24px auto;padding:16px;background:#15202c;color:#f4f0e7}a{color:#8fe2d7}button{font:inherit;padding:10px;margin:5px;cursor:pointer}#preview video{max-width:100%;max-height:55vh}#status{min-height:3em}code{color:#8fe2d7}</style>
+<h1>Calibrar la cámara trasera</h1><p><a href="../">Volver al ejemplo</a>. Procesamiento local en WASM; no se suben imágenes.</p>
+<p>Imprime el tablero a <strong>21 × 15 cm</strong> (cuadrados de 30 mm), plano y sin reescalado automático. Captura 15–25 vistas nítidas con diferentes inclinaciones, distancias y posiciones, cubriendo también los bordes. Mantén la orientación del móvil y el mismo modo de cámara que usarás para tracking.</p>
+<button id="board" disabled>Descargar tablero</button><button id="start" disabled>Iniciar cámara</button><button id="capture" disabled>Capturar vista</button><button id="solve" disabled>Calcular y descargar JSON</button><button id="reset" disabled>Reiniciar vistas</button>
+<p id="status" role="status">Cargando WASM…</p><div id="downloads"></div><div id="preview"></div><pre id="report"></pre>
+<script type="module">
+import {CalibrationSession,CameraManager} from '../dist/webar-facil.core.js';
+const session=new CalibrationSession(),status=document.querySelector('#status');let capture=false,running=false,downloadURL;
+const buttons=Object.fromEntries(['board','start','capture','solve','reset'].map(id=>[id,document.querySelector('#'+id)]));
+const download=(blob,name)=>{if(downloadURL)URL.revokeObjectURL(downloadURL);downloadURL=URL.createObjectURL(blob);const link=document.createElement('a');link.href=downloadURL;link.download=name;link.textContent='Descargar '+name;document.querySelector('#downloads').replaceChildren(link);link.click();};
+const camera=new CameraManager({width:1280,height:720,maxFrameWidth:1280,adaptive:false,onError:error=>{status.textContent=error.message;},onFrame:async frame=>{
+  if(!capture)return;capture=false;buttons.capture.disabled=true;
+  try{const result=await session.addFrame(frame.imageData);status.textContent=result.accepted?`Vista ${result.views} aceptada. Mueve o inclina el tablero antes de la siguiente.`:result.reason==='duplicate-view'?'Vista demasiado parecida: cambia la posición o el ángulo.':'Se necesitan al menos 12 esquinas ChArUco visibles y nítidas.';
+    buttons.solve.disabled=result.views<10;
+  }catch(error){status.textContent=error.message;}finally{buttons.capture.disabled=false;}
+}});
+document.querySelector('#preview').append(camera.videoElement);
+try{await session.initialize(new URL('../vision/opencv.js',location.href).href);buttons.board.disabled=false;buttons.start.disabled=false;buttons.reset.disabled=false;status.textContent='Descarga e imprime el tablero. Después inicia la cámara.';}catch(error){status.textContent=error.message;}
+buttons.board.onclick=async()=>{buttons.board.disabled=true;try{const image=await session.board(),canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').putImageData(new ImageData(image.data,image.width,image.height),0,0);download(await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('No se pudo exportar el tablero.')),'image/png')),'charuco-21x15cm.png');}catch(error){status.textContent=error.message;}finally{buttons.board.disabled=false;}};
+buttons.start.onclick=async()=>{try{await camera.start();running=true;buttons.start.disabled=true;buttons.capture.disabled=false;status.textContent='Coloca el tablero en el encuadre y captura vistas variadas.';}catch(error){status.textContent=error.message;}};
+buttons.capture.onclick=()=>{if(running)capture=true;};
+buttons.solve.onclick=async()=>{buttons.solve.disabled=true;buttons.capture.disabled=true;try{const report=await session.solve();document.querySelector('#report').textContent=JSON.stringify(report,null,2);download(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}),'camera-calibration.json');status.textContent=`Calibración calculada: RMS ${report.rmsPx.toFixed(3)} px. Carga el JSON en el ejemplo.`;}catch(error){status.textContent=error.message;}finally{buttons.solve.disabled=false;buttons.capture.disabled=!running;}};
+buttons.reset.onclick=async()=>{await session.reset();buttons.solve.disabled=true;status.textContent='Vistas borradas.';};
+addEventListener('pagehide',()=>{camera.dispose();session.dispose();if(downloadURL)URL.revokeObjectURL(downloadURL);},{once:true});
+</script></html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Aplicación propia · WebAR</title>
+  <style>
+    body{margin:0;background:#18212a;color:white;font:16px system-ui}#view{position:relative;margin:auto}
+    #view canvas{display:block;position:relative}header{padding:12px}label{display:inline-block;margin:5px}
+  </style>
+  <script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script>
+</head>
+<body>
+  <header>
+    <label>Marcador <input id="image" type="file" accept="image/jpeg,image/png"></label>
+    <label>GLB opcional <input id="model" type="file" accept=".glb"></label>
+    <button id="start">Iniciar mi aplicación</button><button id="stop" disabled>Detener</button>
+    <p id="status">Selecciona JPG/PNG o utiliza el marcador de ejemplo. No requiere calibración manual.</p>
+  </header>
+  <main id="view"></main>
+  <script type="module">
+    // 1. API pública ESM. En un proyecto NPM: importar desde 'webar-facil'.
+    import * as THREE from 'three';
+    import {WebAREngine,ThreeARGroup,ThreeCameraBackground,ThreeARModel} from '../dist/webar-facil.js';
+    const status=document.querySelector('#status'),start=document.querySelector('#start'),stop=document.querySelector('#stop');
+    const image=document.querySelector('#image'),view=document.querySelector('#view');
+    const engine=new WebAREngine({opencvURL:new URL('../vision/opencv.js',location.href),camera:{maxFrameWidth:640,playbackContainer:view}});
+
+    // 2. Renderizador elegido por la aplicación; el motor no crea una escena.
+    const renderer=new THREE.WebGLRenderer({antialias:true});view.append(renderer.domElement);
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();camera.matrixAutoUpdate=false;
+    const background=new ThreeCameraBackground(engine.videoElement);scene.add(background.object3D);
+    const tracked=new ThreeARGroup().bind(engine);scene.add(tracked);
+
+    // 3. Sustituye este contenido por GLTF, animaciones, interacción o tu lógica.
+    const geometry=new THREE.BoxGeometry(.08,.08,.08),material=new THREE.MeshNormalMaterial();
+    const object=new THREE.Mesh(geometry,material);object.position.y=.04;tracked.add(object);
+    // Mismo cargador para GLB normal, Draco o Meshopt. Los decoders se sirven localmente.
+    const model=new ThreeARModel({dracoDecoderPath:new URL('../decoders/draco/',location.href)});tracked.add(model);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x566070,2));
+    async function loadModel(file='./assets/Kai-WebAR-Facil.glb'){
+      await model.load(file,{autoplay:false});
+      const clip=model.animations.find(item=>item.name==='Waving');
+      if(clip)model.playAnimation(clip.name);
+      object.visible=false;
+    }
+    document.querySelector('#model').onchange=event=>{
+      void loadModel(event.target.files[0]).catch(error=>{status.textContent=error.message;});
+    };
+    const resize=()=>{
+      const video=engine.videoElement,aspect=video.videoWidth&&video.videoHeight?video.videoWidth/video.videoHeight:4/3;
+      const width=Math.min(innerWidth,(innerHeight-150)*aspect);renderer.setSize(width,width/aspect);
+    };
+    addEventListener('resize',resize);engine.videoElement.addEventListener('resize',resize);resize();
+    const clock=new THREE.Clock();renderer.setAnimationLoop(()=>{model.update(clock.getDelta());renderer.render(scene,camera);});
+
+    // 4. Las matrices y eventos también pueden consumirse con un renderer propio.
+    engine.onPose((matrix,pose)=>{
+      camera.matrix.fromArray(pose.viewMatrix).invert();camera.updateMatrixWorld(true);
+      if(pose.projectionMatrix){camera.projectionMatrix.fromArray(pose.projectionMatrix);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}
+    });
+    engine.onStatus(message=>{status.textContent=message;
+      if(['stopped','camera-suspended'].includes(message))tracked.visible=false;});
+    engine.onError(error=>{status.textContent=error.message;});
+
+    // 5. Una imagen original es suficiente. El compilador y tracker usan Workers.
+    start.onclick=async()=>{
+      start.disabled=true;image.disabled=true;
+      try{
+        await engine.startCamera();resize();
+        if(!model.model)await loadModel();
+        const result=await engine.loadImageTarget(image.files[0]??'./assets/marcador.jpg');
+        // Ya se generaron ambos: result.buffer (.dat), result.metadata (JSON).
+        console.log('Marcador compilado automáticamente',result.metadata);
+        stop.disabled=false;
+      }catch(error){await engine.stop();status.textContent=error.message;start.disabled=false;image.disabled=false;}
+    };
+    stop.onclick=async()=>{await engine.stop();tracked.visible=false;start.disabled=false;image.disabled=false;stop.disabled=true;};
+    addEventListener('pagehide',()=>{tracked.dispose();model.dispose();engine.dispose();background.dispose();renderer.setAnimationLoop(null);geometry.dispose();material.dispose();renderer.dispose();});
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-11-09T13:56:21.864Z",
+  "environment": {
+    "node": "v24.14.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "fixture": "Deterministic textured 3D scene, 640x480; synthetic input, actual OpenCV WASM computation",
+  "frames": 630,
+  "trackedFrames": 580,
+  "elapsedMs": 27026.3087,
+  "processingMs": {
+    "p50": 40.372299999999086,
+    "p95": 81.17829999999958,
+    "max": 146.04910000000018
+  },
+  "scaleAlignedTrajectoryError": {
+    "p50": 0.004975391543911882,
+    "p95": 0.013268797475482126,
+    "max": 0.014603114893273698,
+    "units": "fixture units"
+  },
+  "wasmHeapBytes": {
+    "warm": 33554432,
+    "end": 33554432
+  },
+  "finalMap": "1",
+  "limitation": "No physical camera, thermal measurement, browser compositor or mobile GPU is included."
+}

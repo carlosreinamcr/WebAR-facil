@@ -1,0 +1,102 @@
+{
+  "name": "webar-facil",
+  "version": "0.1.0-alpha.6",
+  "description": "WebAR Fácil: open-source browser AR with declarative HTML and a single standalone script",
+  "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "IngCarlosReina. - Realidad Aumentada Empezando Desde Cero",
+    "url": "https://realidad-aumentada.com.co"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "docs",
+    "llms.txt",
+    "llms-full.txt",
+    "benchmarks"
+  ],
+  "main": "./dist/webar-facil.js",
+  "module": "./dist/webar-facil.js",
+  "types": "./dist/types/index.d.ts",
+  "unpkg": "./dist/webar-facil.min.js",
+  "jsdelivr": "./dist/webar-facil.min.js",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/webar-facil.js"
+    },
+    "./browser": "./dist/webar-facil.browser.min.js",
+    "./standalone": "./dist/webar-facil.min.js",
+    "./core": {
+      "types": "./dist/types/core.d.ts",
+      "import": "./dist/webar-facil.core.js"
+    },
+    "./workers/*": "./dist/workers/*"
+  },
+  "scripts": {
+    "prepare:vision": "node scripts/prepare-vision.mjs",
+    "compile:marker": "node scripts/compile-marker.mjs",
+    "generate:demo": "node scripts/generate-demo.mjs",
+    "generate:models": "node scripts/generate-models.mjs",
+    "generate:video": "node scripts/generate-demo-video.mjs",
+    "predev": "npm run build",
+    "dev": "vite --host 127.0.0.1",
+    "check": "tsc --noEmit",
+    "build:hamming": "node scripts/build-hamming.mjs",
+    "build": "node scripts/build-hamming.mjs && node scripts/build-info.mjs && npm run prepare:vision && npm run generate:models && npm run check && vite build && vite build --mode standalone && vite build --mode core && vite build --mode workers && tsc -p tsconfig.types.json && node scripts/finalize-types.mjs && node scripts/package-demo.mjs && npm run docs:build && node scripts/release-manifest.mjs",
+    "docs:build": "node scripts/build-docs.mjs",
+    "docs:check": "node scripts/check-docs.mjs",
+    "docs:test-browser": "node scripts/test-docs-browser.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "calibrate": "node scripts/calibrate.mjs",
+    "test:browser": "node --test --test-concurrency=1 tests/browser/*.test.mjs",
+    "benchmark": "node scripts/benchmark.mjs",
+    "benchmark:image": "node scripts/benchmark-image-tracking.mjs",
+    "benchmark:matching": "node scripts/benchmark-matching.mjs",
+    "check:package": "node scripts/verify-package.mjs",
+    "check:release": "node scripts/verify-release.mjs",
+    "reports:summarize": "node scripts/summarize-device-reports.mjs"
+  },
+  "peerDependencies": {
+    "@types/three": ">=0.170.0 <1",
+    "three": ">=0.170.0 <1"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "@techstark/opencv-js": "4.12.0-release.1",
+    "@types/node": "^22.0.0",
+    "@types/three": "^0.180.0",
+    "draco3dgltf": "1.5.9",
+    "markdown-it": "15.0.3",
+    "meshoptimizer": "1.3.0",
+    "ml-matrix": "6.15.1",
+    "playwright": "1.65.0",
+    "sharp": "0.35.5",
+    "three": "^0.180.0",
+    "typescript": "~5.9.0",
+    "vite": "^7.0.0",
+    "wabt": "1.0.37"
+  },
+  "dependencies": {
+    "@types/webxr": "0.5.24",
+    "@webgpu/types": "0.1.74"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    },
+    "@types/three": {
+      "optional": true
+    }
+  },
+  "homepage": "https://realidad-aumentada.com.co/webar-facil.html"
+}

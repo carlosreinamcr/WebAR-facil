@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>30. Explora superficies y toca para colocar</title>
+  <style>
+    body{margin:0;background:#edf3f8;color:#142b40;font:16px/1.5 system-ui}
+    main{max-width:850px;margin:auto;padding:12px}
+    button,select{font:inherit;padding:8px;margin:4px}
+    #view{position:relative;display:grid;place-items:center;height:65dvh;min-height:300px;overflow:hidden;background:#102231;touch-action:none}
+    #aim{position:absolute;z-index:1;translate:-50% -50%;width:42px;height:42px;border:2px dashed #ffc74e;
+      border-radius:8px;background:#ffc74e33;pointer-events:none}
+    #view canvas{cursor:crosshair}
+    #texture-guide{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+    #use-zone{position:absolute;z-index:2;left:50%;bottom:12px;translate:-50% 0;min-height:44px}
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+<main>
+  <a href="./index.html">← Galería</a>
+  <h1>30. Explora superficies y toca para colocar</h1>
+  <p class="example-documentation" data-doc-en="placement.html#matches-and-recovery-in-example-30"><a href="../../docs/placement.html#coincidencias-y-recuperacion-en-el-ejemplo-30">Cómo desarrollar este ejemplo</a></p>
+  <p>Toca una zona con textura y mueve el teléfono hacia un lado. Los puntos azules indican contraste en la imagen. Los amarillos son referencias del mapa cerca de la superficie. El área verde muestra el contorno respaldado por el mapa. Toca el área o pulsa «Usar zona» para previsualizar. Pellizca para ajustar la cuadrícula o el tamaño del contenido.</p>
+  <label>Contenido <select id="content"><option value="model">Modelo GLB</option><option value="video">Vídeo MP4</option></select></label>
+  <button id="start" type="button">Iniciar cámara</button>
+  <button id="place" type="button" disabled>Colocar</button>
+  <button id="reset" type="button" disabled>Otra zona</button>
+  <button id="stop" type="button" disabled>Detener</button>
+  <p id="status" role="status">Pulsa «Iniciar cámara».</p>
+  <p id="recovery-stats" hidden></p>
+  <div id="view"><canvas id="texture-guide" aria-hidden="true"></canvas><div id="aim" aria-hidden="true" hidden></div><button id="use-zone" type="button" hidden>Usar zona</button></div>
+</main>
+<script>
+addEventListener('DOMContentLoaded', () => {
+  const byId = id => document.getElementById(id);
+  const {view,aim,start,place,reset,stop,status,content} = Object.fromEntries(
+    ['view','aim','start','place','reset','stop','status','content'].map(id=>[id,byId(id)]));
+  if (!globalThis.WebARFacil) {
+    start.disabled = true;
+    status.textContent = 'No se cargó WebAR Fácil.';
+    return;
+  }
+  const {THREE,ThreeARScene,ThreeARModel,ThreeARVideo} = WebARFacil;
+  const useZone=byId('use-zone');
+  const recoveryStats=byId('recovery-stats');
+  const guide=byId('texture-guide');
+  const guideContext=guide.getContext('2d');
+  const sample=document.createElement('canvas');
+  sample.width=96;
+  sample.height=72;
+  const sampleContext=sample.getContext('2d',{willReadFrequently:true});
+  const pointers=new Map();
+  let pinchDistance=0;
+  let suppressTapUntil=0;
+  let current;
+  let closing = Promise.resolve();
+
+  // Convierte el toque al sistema del canvas. El visor puede tener márgenes.
+  function screenPoint(canvas,x,y) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height || x<rect.left || x>rect.right || y<rect.top || y>rect.bottom) return null;
+    return new THREE.Vector2((x-rect.left)/rect.width*2-1,1-(y-rect.top)/rect.height*2);
+  }
+
+  function intersect(session,point) {
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(point,session.app.camera);
+    const matrix = new THREE.Matrix4().fromArray(session.pose.worldMatrix);
+    const normal = new THREE.Vector3().setFromMatrixColumn(matrix,1).normalize();
+    if (Math.abs(normal.dot(ray.ray.direction))<.15) return null;
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal,new THREE.Vector3().setFromMatrixPosition(matrix));
+    const hit = ray.ray.intersectPlane(plane,new THREE.Vector3());
+    return hit && {local:hit.clone().applyMatrix4(matrix.invert()), inverse:matrix, distance:hit.distanceTo(ray.ray.origin)};
+  }
+
+  function cross(a,b,c) { return (b.x-a.x)*(c.z-a.z)-(b.z-a.z)*(c.x-a.x); }
+  function hull(points) {
+    const sorted = [...points].sort((a,b)=>a.x-b.x||a.z-b.z);
+    function half(list) {
+      const result=[];
+      for (const point of list) {
+        while (result.length>=2&&cross(result.at(-2),result.at(-1),point)<=0) result.pop();
+        result.push(point);
+      }
+      return result.slice(0,-1);
+    }
+    return half(sorted).concat(half(sorted.reverse()));
+  }
+
+  // Solo dibuja la parte de la superficie respaldada por puntos del mapa.
+  function patchFromMap(session,map) {
+    const hit = intersect(session,session.aim);
+    if (!hit || !hit.distance) return null;
+    const {local:center,inverse,distance}=hit;
+    const points=new Map();
+    const world=new THREE.Vector3();
+    const local=new THREE.Vector3();
+    const cell=distance*.012;
+    for (const {points:xyz} of map.keyframes) {
+      for (let i=0;i<xyz.length;i+=3) {
+        world.fromArray(xyz,i);
+        local.copy(world).applyMatrix4(inverse);
+        if (Math.abs(local.y)>distance*.035||Math.hypot(local.x-center.x,local.z-center.z)>distance*.42) continue;
+        world.project(session.app.camera);
+        if (world.z< -1||world.z>1||Math.abs(world.x-session.aim.x)>.48||Math.abs(world.y-session.aim.y)>.40) continue;
+        points.set(Math.round(local.x/cell)+','+Math.round(local.z/cell),local.clone());
+      }
+    }
+    showSupport(session,[...points.values()]);
+    if (points.size<6) return null;
+    const outline=hull(points.values());
+    if (outline.length<3) return null;
+    const centroid=outline.reduce((sum,point)=>sum.add(point),new THREE.Vector3()).divideScalar(outline.length);
+    centroid.y=0;
+    const selection=outline.every((a,i)=>cross(a,outline[(i+1)%outline.length],center)>=0)?center:centroid;
+    let clearance=Infinity;
+    for (const [i,a] of outline.entries()) {
+      const b=outline[(i+1)%outline.length];
+      clearance=Math.min(clearance,cross(a,b,centroid)/Math.hypot(b.x-a.x,b.z-a.z));
+    }
+    const side=2*Math.min(clearance/Math.SQRT2,distance*.14);
+    return side>=distance*.035?{center:selection,centroid,side,outline}:null;
+  }
+
+  function showSupport(session,points) {
+    session.support?.removeFromParent();
+    session.support?.geometry.dispose();
+    session.support?.material.dispose();
+    session.support=null;
+    if (!points.length) return;
+    const geometry=new THREE.BufferGeometry().setFromPoints(points);
+    const material=new THREE.PointsMaterial({color:0xffce4b,size:5,sizeAttenuation:false,depthWrite:false});
+    session.support=new THREE.Points(geometry,material);
+    session.anchor.add(session.support);
+  }
+
+  function clearGrid(session) {
+    session.grid?.removeFromParent();
+    session.grid?.dispose();
+    session.grid=null;
+    session.area?.removeFromParent();
+    session.area?.geometry.dispose();
+    session.area?.material.dispose();
+    session.area=null;
+    showSupport(session,[]);
+    useZone.hidden=true;
+    session.patch=null;
+  }
+
+  function hideContent(session) {
+    session.model.visible=session.video.visible=false;
+    session.video.pause();
+  }
+
+  function scan(session,point) {
+    recoveryStats.hidden=true;
+    clearGrid(session);
+    hideContent(session);
+    session.aim.copy(point);
+    session.revision++;
+    session.preview=null;
+    session.placement=null;
+    session.snapshot=null;
+    session.restoring=false;
+    session.contentScale=1;
+    session.placed=false;
+    session.retryAt=0;
+    place.disabled=true;
+    aim.hidden=false;
+    status.textContent='Zona en evaluación. Muévete un poco de lado y mantén la zona en cámara.';
+  }
+
+  function updateAim(session) {
+    if (aim.hidden) return;
+    const canvas=session.app.renderer.domElement.getBoundingClientRect();
+    const bounds=view.getBoundingClientRect();
+    aim.style.left=canvas.left-bounds.left+(session.aim.x+1)*canvas.width/2+'px';
+    aim.style.top=canvas.top-bounds.top+(1-session.aim.y)*canvas.height/2+'px';
+  }
+
+  // Muestreo de contraste para orientar al usuario mientras se construye el mapa.
+  function drawTextureGuide(session) {
+    if (!guideContext||!sampleContext) return;
+    const camera=session.app.engine.videoElement;
+    const now=performance.now();
+    if (now<session.nextGuide||camera.readyState<2) return;
+    session.nextGuide=now+220;
+    guide.width=view.clientWidth;
+    guide.height=view.clientHeight;
+    if (session.patch||session.placed) return;
+    const bounds=view.getBoundingClientRect();
+    const canvas=session.app.renderer.domElement.getBoundingClientRect();
+    const {width:w,height:h}=sample;
+    sampleContext.drawImage(camera,0,0,w,h);
+    const pixels=sampleContext.getImageData(0,0,w,h).data;
+    const light=(x,y)=>{const i=(y*w+x)*4;return (pixels[i]+2*pixels[i+1]+pixels[i+2])/4;};
+    guideContext.fillStyle='#67e6ff';
+    for(let row=4;row<h-4;row+=5)for(let col=4;col<w-4;col+=5){
+      if(Math.abs(col/w*2-1-session.aim.x)>.48||Math.abs(1-row/h*2-session.aim.y)>.40)continue;
+      let best=22,point;
+      for(let y=row-2;y<=row+2;y++)for(let x=col-2;x<=col+2;x++){
+        const contrast=Math.min(Math.abs(light(x+1,y)-light(x-1,y)),Math.abs(light(x,y+1)-light(x,y-1)));
+        if(contrast>best){best=contrast;point={x,y};}
+      }
+      if(!point)continue;
+      guideContext.beginPath();
+      guideContext.arc(canvas.left-bounds.left+point.x/w*canvas.width,canvas.top-bounds.top+point.y/h*canvas.height,2,0,Math.PI*2);
+      guideContext.fill();
+    }
+  }
+
+  function isFresh(session) { return session.pose&&performance.now()-session.pose.timestampMs<700; }
+
+  async function updatePatch(session) {
+    if (session.checking||session.grid||session.placed||performance.now()<session.retryAt) return;
+    session.checking=true;
+    session.retryAt=performance.now()+600;
+    const revision=session.revision;
+    try {
+      const snapshot=await session.app.engine.exportSLAMMap();
+      const {map}=snapshot;
+      if (current!==session||revision!==session.revision||!isFresh(session)) return;
+      if (!snapshot.anchor||!map.groundPlane?.worldFromPlane.every((value,i)=>value===session.pose.worldMatrix[i])) return;
+      const patch=patchFromMap(session,map);
+      if (!patch) return;
+      const grid=new THREE.GridHelper(patch.side,8,0xb7ffcf,0x52ef91);
+      grid.position.set(patch.centroid.x,.002,patch.centroid.z);
+      grid.material.transparent=true;
+      grid.material.opacity=.85;
+      grid.material.depthWrite=false;
+      grid.scale.set(.65,1,.65);
+      session.anchor.add(grid);
+      session.grid=grid;
+      session.patch=patch;
+      session.snapshot=snapshot;
+      const shape=new THREE.Shape(patch.outline.map(point=>new THREE.Vector2(point.x,-point.z)));
+      const geometry=new THREE.ShapeGeometry(shape);
+      geometry.rotateX(-Math.PI/2);
+      session.area=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({
+        color:0x39ed87,opacity:.28,transparent:true,side:THREE.DoubleSide,depthWrite:false,
+      }));
+      session.area.position.y=.001;
+      session.anchor.add(session.area);
+      useZone.hidden=false;
+      aim.hidden=true;
+      status.textContent='Zona verde lista. Toca el punto donde quieres colocar el contenido.';
+    } catch (error) {
+      // Durante el arranque puede que el mapa aún no esté listo para exportarse.
+      if (current===session&&revision===session.revision) session.retryAt=performance.now()+800;
+    } finally { session.checking=false; }
+  }
+
+  async function preview(session,point) {
+    session.preview=point;
+    hideContent(session);
+    place.disabled=true;
+    const selected=content.value==='video'?session.video:session.model;
+    const token=++session.revision;
+    try {
+      if (selected===session.video) {
+        session.videoLoad ??= session.video.setSource('../assets/video.mp4').catch(error=>{session.videoLoad=null;throw error;});
+        await session.videoLoad;
+      } else {
+        session.modelLoad ??= session.model.load('../assets/robot.glb').catch(error=>{session.modelLoad=null;throw error;});
+        await session.modelLoad;
+      }
+      if (current!==session||token!==session.revision||!session.patch) return;
+      selected.position.copy(point);
+      if (selected===session.video) {
+        selected.setWidth(session.patch.side*.85);
+        session.videoBaseHeight=session.patch.side*.38;
+        selected.position.y=session.videoBaseHeight*session.contentScale;
+      } else selected.setSize(session.patch.side*.8);
+      selected.visible=true;
+      selected.scale.setScalar(session.contentScale);
+      place.disabled=!isFresh(session);
+      status.textContent='Vista previa lista. Pulsa «Colocar» para confirmar.';
+    } catch (error) {
+      if (current===session&&token===session.revision) status.textContent=error.message;
+    }
+  }
+
+  useZone.onclick=()=>{
+    if (current?.patch&&isFresh(current)) void preview(current,current.patch.center);
+  };
+
+  view.addEventListener('click',event=>{
+    if (event.target===useZone||performance.now()<suppressTapUntil) return;
+    const session=current;
+    if (!session?.ready||session.placed) return;
+    const point=screenPoint(session.app.renderer.domElement,event.clientX,event.clientY);
+    if (!point) return;
+    if (session.patch&&isFresh(session)) {
+      const hit=intersect(session,point);
+      const {outline}=session.patch;
+      if (hit&&outline.every((a,i)=>cross(a,outline[(i+1)%outline.length],hit.local)>=0)) {
+        void preview(session,hit.local);
+        return;
+      }
+    }
+    scan(session,point);
+  });
+
+  view.addEventListener('pointerdown',event=>{
+    if (event.pointerType!=='touch'||event.target===useZone||!current?.ready) return;
+    pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    if (pointers.size===2) pinchDistance=0;
+  });
+  view.addEventListener('pointermove',event=>{
+    if (!pointers.has(event.pointerId)||!current) return;
+    pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    if (pointers.size!==2) return;
+    const [a,b]=pointers.values();
+    const distance=Math.hypot(a.x-b.x,a.y-b.y);
+    suppressTapUntil=performance.now()+350;
+    if (pinchDistance>0&&distance>0) {
+      const factor=distance/pinchDistance;
+      const selected=content.value==='video'?current.video:current.model;
+      if (selected.visible) {
+        current.contentScale=THREE.MathUtils.clamp(current.contentScale*factor,.35,4);
+        selected.scale.setScalar(current.contentScale);
+        if (selected===current.video) selected.position.y=current.videoBaseHeight*current.contentScale;
+      } else if (current.grid) {
+        const next=THREE.MathUtils.clamp(current.grid.scale.x*factor,.3,1);
+        current.grid.scale.set(next,1,next);
+      }
+    }
+    pinchDistance=distance;
+  });
+  function releasePointer(event) {
+    if (pointers.size>1) suppressTapUntil=performance.now()+350;
+    pointers.delete(event.pointerId);
+    pinchDistance=0;
+  }
+  view.addEventListener('pointerup',releasePointer);
+  view.addEventListener('pointercancel',releasePointer);
+
+  function hidePlacement(session) {
+    session.placement.lostAt??=performance.now();
+    session.placement.captureGeneration++;
+    hideContent(session);
+    status.textContent='Buscando la colocación original…';
+  }
+
+  function updateRecoveryStats(placement) {
+    recoveryStats.hidden=false;
+    const total=placement.recoveries+(placement.lostAt!==null?1:0);
+    const time=placement.lastRecoveryMs===null?'':' · Última recuperación: '+(placement.lastRecoveryMs/1000).toFixed(1)+' s';
+    recoveryStats.textContent='Referencias del mapa: '+placement.snapshot.map.keyframes.length+
+      ' · Recuperaciones: '+placement.recoveries+'/'+total+time;
+  }
+
+  async function captureView(session) {
+    const placement=session.placement;
+    if (!placement||session.restoring||!isFresh(session)||placement.capturing) return;
+    placement.nextCaptureAt=performance.now()+2200;
+    placement.capturing=true;
+    const generation=placement.captureGeneration;
+    try {
+      const snapshot=await session.app.engine.exportSLAMMap({includeCurrentView:!placement.originalView});
+      if (current!==session||session.placement!==placement||generation!==placement.captureGeneration||
+          session.restoring||!isFresh(session)||!snapshot.anchor?.every((value,i)=>value===placement.snapshot.anchor[i])) return;
+      if (snapshot.map.currentViewCaptured) placement.originalView=snapshot.map.keyframes.at(-1);
+      // Conservar la vista de colocación junto con las perspectivas del recorrido.
+      const frames=snapshot.map.keyframes.filter(frame=>!placement.originalView||
+        !frame.view.every((value,i)=>value===placement.originalView.view[i]));
+      if (placement.originalView) frames.splice(49,Infinity,placement.originalView);
+      placement.snapshot={...snapshot,map:{...snapshot.map,keyframes:frames}};
+      updateRecoveryStats(placement);
+    } catch (error) {
+      console.debug('No se pudo actualizar el mapa de colocación.',error);
+    } finally {
+      placement.capturing=false;
+    }
+  }
+
+  async function restorePlacementMap(session) {
+    if (session.restoring) return;
+    session.restoring=true;
+    reset.disabled=content.disabled=true;
+    const placement=session.placement;
+    try {
+      await session.app.engine.importSLAMMap(placement.snapshot);
+    } catch (error) {
+      if (current===session&&session.placement===placement) {
+        status.textContent='No se pudo recuperar el mapa original. Pulsa «Otra zona» para volver a escanear.';
+        console.debug(error);
+      }
+    } finally {
+      session.restoring=false;
+      if (current===session) {
+        reset.disabled=false;
+        content.disabled=Boolean(session.placement);
+      }
+    }
+  }
+
+  async function close() {
+    const session=current;
+    current=null;
+    start.disabled=place.disabled=reset.disabled=stop.disabled=true;
+    content.disabled=false;
+    recoveryStats.hidden=true;
+    aim.hidden=true;
+    guideContext?.clearRect(0,0,guide.width,guide.height);
+    pointers.clear();
+    pinchDistance=0;
+    if (session) {
+      clearGrid(session);
+      closing=session.app.dispose();
+    }
+    try { await closing; }
+    finally { start.disabled=false; }
+  }
+
+  async function open() {
+    start.disabled=true;
+    status.textContent='Abriendo cámara…';
+    const app=new ThreeARScene({container:view,engineOptions:{fallback:{keyframeCorrection:true,floorROI:{x:0,y:0,width:1,height:1}}}});
+    const model=new ThreeARModel();
+    const video=new ThreeARVideo({orientation:'upright',muted:true,loop:true});
+    const session={app,model,video,anchor:app.getAnchor(),aim:new THREE.Vector2(0,-.2),revision:0,retryAt:0,nextGuide:0};
+    current=session;
+    hideContent(session);
+    app.addContent('default',model);
+    app.addContent('default',video);
+    app.engine.onPose((_matrix,pose)=>{
+      if (current!==session||pose.backend!=='optical-flow'||!pose.surfaceDetected) return;
+      const placement=session.placement;
+      if (placement&&(session.restoring||(!session.pose&&!pose.diagnostics?.relocalized)||
+          !placement.snapshot.anchor.every((value,index)=>value===pose.worldMatrix[index]))) return;
+      const recovered=!session.pose;
+      session.pose=pose;
+      if (recovered&&placement) {
+        placement.recoveryAttempted=false;
+        if (placement.lostAt!==null) {
+          placement.lastRecoveryMs=performance.now()-placement.lostAt;
+          placement.lostAt=null;
+          placement.recoveries++;
+          updateRecoveryStats(placement);
+        }
+        placement.content.visible=true;
+        const inliers=pose.diagnostics?.inliers;
+        status.textContent='Colocación original recuperada.'+(Number.isFinite(inliers)?' Puntos seguidos: '+inliers+'.':'');
+        if (video.visible) void video.play().catch(error=>{if (current===session) status.textContent=error.message;});
+      }
+      void updatePatch(session);
+    });
+    app.engine.on('scanGuidance',({hint})=>{
+      if (current!==session||session.grid) return;
+      if (session.placed) {
+        if (session.pose||session.restoring) return;
+        const recoveryMessages={
+          'return-to-map':'No se encontraron coincidencias con las vistas guardadas. Vuelve al ángulo de colocación.',
+          'map-matches-insufficient':'Se encontraron pocas coincidencias. Incluye en cámara los alrededores de la superficie.',
+          'map-pose-unverified':'Hay coincidencias, pero aún no bastan para confirmar la posición. Cambia un poco el ángulo.',
+          'map-pose-confirming':'Posición candidata encontrada. Mantén el teléfono quieto para confirmarla.',
+        };
+        if(recoveryMessages[hint])status.textContent=recoveryMessages[hint];
+        return;
+      }
+      if (hint==='map-initializing') status.textContent='Buscando puntos de referencia. Mueve el teléfono lateralmente.';
+      if (hint==='plane-unverified') status.textContent='Comparando los puntos para estimar la superficie. Mantén la zona en cámara.';
+    });
+    app.engine.onStatus(state=>{
+      if (current!==session) return;
+      if (state==='camera-resumed'&&session.placement&&!session.pose&&!session.restoring) {
+        session.placement.recoveryAttempted=true;
+        void restorePlacementMap(session);
+        return;
+      }
+      if (!['odometry-lost','odometry-map-reset','camera-suspended'].includes(state)) return;
+      session.pose=null;
+      if (session.placement) {
+        hidePlacement(session);
+        updateRecoveryStats(session.placement);
+        if (state==='odometry-map-reset'&&!session.restoring&&!session.placement.recoveryAttempted) {
+          session.placement.recoveryAttempted=true;
+          void restorePlacementMap(session);
+        }
+        return;
+      }
+      scan(session,session.aim);
+      status.textContent='Vuelve a encuadrar la superficie.';
+    });
+    app.onRender(()=>{
+      updateAim(session);
+      drawTextureGuide(session);
+      if (session.placement&&performance.now()>=session.placement.nextCaptureAt&&isFresh(session)) {
+        void captureView(session);
+      }
+      if (!session.placed) {
+        const selected=content.value==='video'?session.video:session.model;
+        place.disabled=!session.patch||!selected.visible||!isFresh(session);
+        if (session.patch&&!isFresh(session)) scan(session,session.aim);
+      }
+    });
+    stop.disabled=false;
+    await app.engine.startCamera();
+    if (current!==session) return;
+    await app.engine.enableSLAM({backend:'optical-flow',placement:'hit-test'});
+    if (current!==session) return;
+    session.ready=true;
+    reset.disabled=false;
+    scan(session,session.aim);
+  }
+
+  start.onclick=()=>{void open().catch(async error=>{
+    if (error.name==='AbortError') return;
+    await close();
+    status.textContent=error.message;
+  });};
+  stop.onclick=()=>{void close().then(()=>{status.textContent='Cámara detenida.';});};
+  reset.onclick=()=>{
+    if (!current?.ready) return;
+    if (current.placement) void close().then(open).catch(error=>{status.textContent=error.message;});
+    else scan(current,current.aim);
+  };
+  place.onclick=()=>{
+    const session=current;
+    if (!session?.patch||!session.preview||!session.snapshot?.anchor||place.disabled||!isFresh(session)) return;
+    const placement={snapshot:session.snapshot,content:content.value==='video'?session.video:session.model,
+      recoveryAttempted:false,nextCaptureAt:0,captureGeneration:0,lostAt:null,lastRecoveryMs:null,recoveries:0};
+    session.placement=placement;
+    session.placed=true;
+    clearGrid(session);
+    place.disabled=true;
+    content.disabled=true;
+    status.textContent='Contenido colocado.';
+    updateRecoveryStats(placement);
+    if (session.video.visible) void session.video.play().catch(error=>{if (current===session) status.textContent=error.message;});
+    void captureView(session);
+  };
+  content.onchange=()=>{
+    if (current?.preview&&!current.placed) void preview(current,current.preview);
+  };
+  addEventListener('pagehide',()=>{void close();});
+});
+</script>
+</body>
+</html>

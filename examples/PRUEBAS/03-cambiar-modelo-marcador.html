@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>03 · Dos botones para cambiar el GLB con marcador</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #edf3f8; color: #142b40; font: 16px/1.45 system-ui; }
+    header { padding: 12px; } h1 { margin: 4px 0; font-size: 21px; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input { font: inherit; padding: 9px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } button:disabled { cursor: default; }
+    input[type="text"] { width: min(100%, 360px); } input[type="range"] { width: min(100%, 320px); }
+    webar-scene { display: block; height: 65vh; height: 65dvh; min-height: 320px; }
+  </style>
+  <!-- 1. Un solo SDK: incluye Three.js, loaders, componentes y controles de cámara.
+       Esta ruta es para examples/PRUEBAS. El build la adapta en dist/examples/PRUEBAS.
+       Servir con HTTP/HTTPS; en el teléfono utiliza HTTPS. -->
+  <script defer src="../../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería de ejemplos</a>
+    <h1>03. Dos botones para cambiar el GLB con marcador</h1>
+  <p class="example-documentation" data-doc-en="recipes.html#change-a-model-from-a-button"><a href="../../docs/interaction.html#cambiar-archivos-sin-cerrar-camara">Cómo desarrollar este ejemplo</a></p>
+    <p>Elige robot o cohete. Son GLB distintos y el cambio conserva la sesión de seguimiento.</p>
+    <p><a href="./assets/marcador.png" target="_blank" rel="noopener">Abrir marcador</a> · Pulsa «Iniciar AR» y apunta a la imagen del marcador, mostrada en otra pantalla o impresa.</p>
+    <button type="button" data-model="./assets/robot.glb" disabled>Robot</button>
+    <button type="button" data-model="./assets/cohete.glb" disabled>Cohete</button>
+    <p id="message" role="status">Pulsa «Iniciar AR» en la escena.</p>
+  </header>
+  <!-- 2. La escena crea el visor y los botones Iniciar AR / Detener.
+       Los cambios de contenido no requieren abrir otra cámara. -->
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa la ruta del script y que hayas ejecutado npm run build.</p>
+    <!-- JPG/PNG: el motor compila el marcador automáticamente al iniciar.
+         physical-width indica el ancho IMPRESO de la imagen en metros. -->
+    <webar-target src="./assets/marcador.png" target-id="poster" physical-width="0.2">
+      <!-- Sustituye src por tu GLB. size ajusta su dimensión mayor.
+           position y rotation modifican el contenido, no la pose del tracking. -->
+      <webar-model id="model" src="./assets/robot.glb" size="0.35" rotation="0 0 0"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // 3. DOMContentLoaded espera también al SDK cargado con defer.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar');
+      const message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const model = document.querySelector('#model');
+      const buttons = [...document.querySelectorAll('[data-model]')];
+      const enable = value => buttons.forEach(button => { button.disabled = !value; });
+      scene.addEventListener('ar-ready', () => enable(true));
+      scene.addEventListener('ar-stopped', () => enable(false));
+
+      for (const button of buttons) {
+        button.onclick = async () => {
+          const currentApp = scene.app;
+          if (!currentApp) return;
+          enable(false); // Evitar dos descargas simultáneas.
+          try {
+            // El atributo src es la API: no sustituimos el engine ni la cámara.
+            model.setAttribute('src', button.dataset.model);
+            await model.updateComplete;
+            if (scene.app === currentApp) message.textContent = 'Modelo cargado: ' + button.textContent;
+          } catch (error) {
+            if (scene.app === currentApp) message.textContent = error.message;
+          } finally {
+            enable(scene.app === currentApp && !!scene.engine);
+          }
+        };
+      }
+    });
+  </script>
+</body>
+</html>

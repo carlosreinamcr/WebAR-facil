@@ -1,0 +1,8 @@
+{
+  "package": "@techstark/opencv-js",
+  "version": "4.12.0-release.1",
+  "upstream": "https://github.com/opencv/opencv/tree/4.12.0",
+  "originalSHA256": "bd0c3e6448043de04f6a64a12cb7b759f78c3ab8f7c35c9f2e0f71c88bb17103",
+  "distributedSHA256": "af193b0428579beb8d6d8c6f49a2f3c1dc44bf6f0009659ec94c076c4283356f",
+  "modification": "UMD root this -> globalThis; initial growing heap and WASM memory import minimum 128MiB -> 32MiB; static memory layout verified"
+}

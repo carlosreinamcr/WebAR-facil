@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>28. Escala métrica experimental</title>
+  <style>
+    body{margin:0;background:#102231;color:#eef5fc;font:16px system-ui}
+    main{max-width:760px;margin:auto;padding:1rem}
+    a{color:#8cd8ff}button{padding:.7rem;margin:.25rem;font:inherit}
+    #view{height:52dvh;min-height:240px;overflow:hidden;background:#070d13}
+    pre{white-space:pre-wrap;font-size:.85rem}
+    #guide{padding:.7rem;background:#173950;border-left:4px solid #ffce43}
+    .experimental{padding:.7rem;background:#39301a;border-left:4px solid #ffce43;color:#fff5dc}
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+<main>
+  <a href="./index.html">← Los ejemplos</a>
+  <h1>28. Escala métrica experimental</h1>
+  <p class="example-documentation" data-doc-en="spatial-tracking.html"><a href="../../docs/spatial-tracking.html#escala-metrica-optica-experimental">Cómo desarrollar este ejemplo</a></p>
+  <p class="experimental"><strong>Experimental.</strong> La escala métrica con cámara y sensores está en pausa y su precisión física sigue sin validarse. Este ejemplo se conserva para pruebas y diagnóstico.</p>
+  <p>En iPhone, usa el modo óptico en vertical. Apunta a un suelo con textura y desplaza el teléfono de lado a lado varias veces, con pausas cortas y sin girarlo bruscamente. En un Android compatible puedes probar también WebXR.</p>
+  <div>
+    <button id="optical" disabled>Probar cámara y sensores</button>
+    <button id="xr" disabled>Probar WebXR</button>
+    <button id="guide-start" disabled>Iniciar prueba guiada</button>
+    <button id="place" disabled>Mostrar barra de 2 m</button>
+    <button id="stop" disabled>Detener</button>
+    <button id="save" disabled>Guardar diagnóstico</button>
+  </div>
+  <p><label><input id="reference-verified" type="checkbox"> Medí 20 cm entre las dos posiciones del teléfono</label></p>
+  <p id="status" role="status">Cargando la librería…</p>
+  <p id="guide" role="status" hidden></p>
+  <p id="guide-signal" hidden></p>
+  <div id="view"></div>
+  <pre id="metrics" aria-label="Diagnóstico de cámara y sensores"></pre>
+  <p>La barra mide 2 m en las coordenadas del motor. Para verificar el resultado, centra una cinta de 2 m sobre el mismo suelo y compara los extremos. La cinta no interviene en el cálculo.</p>
+</main>
+<script>
+addEventListener('DOMContentLoaded', () => {
+  const $ = id => document.getElementById(id);
+  const status = $('status'), optical = $('optical'), xr = $('xr'), place = $('place');
+  const stop = $('stop'), save = $('save');
+  const guideButton = $('guide-start'), guideStatus = $('guide'), guideSignal = $('guide-signal');
+  const referenceVerified = $('reference-verified');
+  if (!globalThis.WebARFacil) { status.textContent = 'No se pudo cargar el SDK.'; return; }
+  const { ExperimentalMetricScale, ThreeARScene, ARDiagnostics, THREE } = WebARFacil;
+  const metric = new ExperimentalMetricScale();
+  const app = new ThreeARScene({
+    container: $('view'), maxPixelRatio: 1.25, antialias: false,
+    engineOptions: {
+      experimentalMetricScale: metric,
+      camera: { performance: 'balanced' },
+    },
+  });
+  const engine = app.engine;
+
+  // Los extremos de la barra están a -1 y +1 en unidades de mundo.
+  const geometry = new THREE.BoxGeometry(2, .022, .045);
+  const material = new THREE.MeshBasicMaterial({color: 0xffce43});
+  const bar = new THREE.Mesh(geometry, material);
+  bar.position.y = .011;
+  bar.visible = false;
+  app.addContent('default', bar);
+
+  let mode = null, nativeSupported = false, nativeReady = false;
+  let report = null, lastOpticalPose = -Infinity, placed = false, stopping = false;
+  let guide = null, opticalReady = false;
+  // La medida física solo se anota en el informe. El estimador no la recibe.
+  const referenceMeters = .2;
+  const guideSteps = [
+    {id:'baseline', seconds:4, text:'Reposo inicial. Sujeta el teléfono en vertical, apunta al suelo y mantenlo quieto.'},
+    ...Array.from({length:3},(_,index)=>[
+      {id:'right'+(index+1), seconds:2, text:'Ahora, unos 20 cm a la derecha. Arranca y frena con claridad, sin girar el teléfono.'},
+      {id:'restRight'+(index+1), seconds:2, text:'Mantén el teléfono quieto en esta posición.'},
+      {id:'left'+(index+1), seconds:2, text:'Ahora, unos 20 cm a la izquierda. Arranca y frena con claridad, sin girar el teléfono.'},
+      {id:'restLeft'+(index+1), seconds:2, text:'Mantén el teléfono quieto en esta posición.'},
+    ]).flat(),
+  ];
+  const snapshot = () => {
+    const diagnostics = metric.diagnostics();
+    const comparison = guide ? Object.fromEntries(guide.completedMoves.map(id=>{
+      const phase=diagnostics.guidedPhases[id];
+      const estimatedMeters=phase?.visualDisplacementMeters??null;
+      return [id,{estimatedMeters,visualCoverageMs:phase?.visualCoverageMs??0,
+        absoluteErrorMeters:guide.referenceVerified&&estimatedMeters!==null?Math.abs(estimatedMeters-referenceMeters):null}];
+    })) : null;
+    const returnChecks=guide?Object.fromEntries([1,2,3].flatMap(index=>{
+      const right=guide.completedMoves.find(id=>id===`right${index}`||id.startsWith(`right${index}Retry`));
+      const left=guide.completedMoves.find(id=>id===`left${index}`||id.startsWith(`left${index}Retry`));
+      return right&&left?[[`roundTrip${index}`,{errorUnits:metric.guidedReturnError(right,left),
+        visualReference:guide.references[index]??null}]]:[];
+    })):null;
+    return {...diagnostics,guidedMotion:guide?{
+      state:guide.state, phasesShown:guide.index+1, elapsedMs:Math.round((guide.ended??performance.now())-guide.started),
+      evaluatedSinceStart:(guide.finalWindows??diagnostics.windowsEvaluated)-guide.initialWindows,
+      referenceMeters, referenceVerified:guide.referenceVerified, comparison,returnChecks,
+      retries:guide.retries, waitingForTracking:guide.paused,
+    }:null};
+  };
+  async function readVisualReference(action,id){
+    try{return await engine.checkSLAMVisualReference(action,id);}
+    catch{return {status:'unavailable'};}
+  }
+  async function advanceGuide(){
+    if(guide?.state!=='running')return;
+    if(!metric.hasStableVisualTracking()){pauseGuide();return;}
+    const step=guideSteps[guide.index];
+    if(!step){
+      guide.index=guideSteps.length-1;
+      endGuide('completed','Prueba completada. Pulsa Detener para enviar el diagnóstico.');
+      return;
+    }
+    const active=guide, phaseId=step.id+(guide.repeating?'Retry'+guide.retries:'');
+    const attempt=++guide.attempt;
+    const isCurrent=()=>guide===active&&guide.state==='running'&&!guide.paused&&guide.attempt===attempt;
+    if(step.id.startsWith('right')){
+      guideStatus.textContent='Mantén el teléfono quieto mientras se guarda la referencia de salida.';
+      const capture=await readVisualReference('capture',phaseId);
+      if(!isCurrent())return;
+      if(!metric.hasStableVisualTracking()){pauseGuide();return;}
+      guide.references[step.id.at(-1)]={id:phaseId,capture,verification:null};
+    }
+    guide.phaseId=phaseId;
+    metric.setGuidedMotionPhase(guide.phaseId);
+    guide.repeating=false;
+    guideStatus.textContent=step.text;
+    guide.timer=setTimeout(async()=>{
+      if(guide?.state!=='running' || guide.paused)return;
+      if(!metric.hasStableVisualTracking()){pauseGuide();return;}
+      if(step.id==='baseline'){
+        const phase=metric.diagnostics().guidedPhases[guide.phaseId];
+        const peak=phase?.accelerationPeakMps2;
+        if(peak && Math.hypot(peak.x,peak.y,peak.z)>.65){
+          metric.pauseGuidedMotionPhase();
+          if(retryGuide()){
+            guideStatus.textContent='Se detectó movimiento durante el reposo. Mantén el teléfono quieto para repetirlo.';
+            guide.timer=setTimeout(advanceGuide,800);
+          }
+          return;
+        }
+      }
+      if(step.id.startsWith('restLeft')){
+        const reference=guide.references[step.id.at(-1)];
+        if(reference?.capture.status==='captured'){
+          const verification=await readVisualReference('verify',reference.id);
+          if(!isCurrent())return;
+          if(!metric.hasStableVisualTracking()){pauseGuide();return;}
+          reference.verification=verification;
+        }
+      }
+      if(/^(right|left)/.test(step.id))guide.completedMoves.push(guide.phaseId);
+      guide.index++;
+      advanceGuide();
+    },step.seconds*1000);
+  }
+  function retryGuide(){
+    if(guide.repeating)return true;
+    if(guide.retries>=7){
+      endGuide('interrupted','La guía alcanzó el límite de repeticiones. Puedes detener y guardar el informe.');
+      return false;
+    }
+    guide.retries++;
+    guide.repeating=true;
+    return true;
+  }
+  function pauseGuide(){
+    if(guide?.state!=='running' || guide.paused)return;
+    guide.attempt++;
+    clearTimeout(guide.timer);
+    metric.pauseGuidedMotionPhase();
+    if(!retryGuide())return;
+    guide.paused=true;
+    guideStatus.textContent='Seguimiento perdido. Mantén el suelo encuadrado y vuelve despacio a la zona escaneada.';
+  }
+  function endGuide(state,message){
+    if(guide?.state!=='running')return;
+    clearTimeout(guide.timer);
+    guide.state=state;
+    guide.paused=false;
+    guide.ended=performance.now();
+    guide.finalWindows=metric.diagnostics().windowsEvaluated;
+    metric.setGuidedMotionCapture(false);
+    guideStatus.textContent=message;
+    guideSignal.hidden=true;
+  }
+  guideButton.onclick=()=>{
+    if(!metric.hasStableVisualTracking())return;
+    guide={state:'running',index:0,started:performance.now(),initialWindows:metric.diagnostics().windowsEvaluated,
+      paused:false,retries:0,repeating:false,attempt:0,completedMoves:[],referenceVerified:referenceVerified.checked,references:{}};
+    metric.setGuidedMotionCapture(true);
+    guideStatus.hidden=false;
+    advanceGuide();
+    buttons();
+  };
+  globalThis.WebARLocalReports?.attachEngine(engine, {
+    configuration: {mode:'slam', backend:'auto', performance:'balanced'},
+    getRenderer: () => app.renderer,
+    metricScale: () => report?.optical ? snapshot() : null,
+  });
+  const buttons = () => {
+    optical.disabled = mode !== null;
+    xr.disabled = mode !== null || !nativeSupported;
+    stop.disabled = mode === null;
+    guideButton.disabled = !opticalReady || !metric.hasStableVisualTracking() || stopping || guide?.state === 'running';
+    referenceVerified.disabled = guide?.state === 'running';
+    place.disabled = mode !== 'optical-flow' || placed || performance.now()-lastOpticalPose > 650;
+  };
+  const updateMetrics = () => {
+    if (mode === 'optical-flow' || (!mode && report?.optical)) {
+      const stable=metric.hasStableVisualTracking();
+      if(guide?.state==='running'){
+        if(!stable)pauseGuide();
+        else if(guide.paused){
+          guide.paused=false;
+          advanceGuide();
+        }
+      }else if(opticalReady&&!guide){
+        guideStatus.hidden=false;
+        guideStatus.textContent=stable
+          ?'Seguimiento estable. Marca dos posiciones a 20 cm de distancia para comprobar la prueba y pulsa Iniciar prueba guiada.'
+          :'Buscando seguimiento estable. Apunta a una zona con textura y desplaza el teléfono lentamente.';
+      }
+      if (performance.now()-lastOpticalPose > 650) bar.visible = false;
+      const d = snapshot();
+      const ms = n => n === null ? '—' : n.toFixed(1) + ' ms';
+      const percent = n => n === null ? '—' : Math.round(100*n) + ' %';
+      const rejected = d.rejectedWindows, interrupted = d.interruptions;
+      const timing = d.lastTimingFit ?? d.timing;
+      const signal = d.motionSignal.guidedWeak ?? d.motionSignal.weak;
+      const xyz = values => [values.x,values.y,values.z].map(n=>n.toFixed(3)).join(' / ');
+      const baseline = Object.entries(d.guidedPhases).findLast(([id])=>id.startsWith('baseline'))?.[1];
+      const pulses = Object.entries(d.guidedPhases).filter(([id,phase])=>
+        /^(right|left)/.test(id) && phase.accelerationPeakMps2);
+      const comparisons=Object.entries(d.guidedMotion?.comparison??{});
+      const cm=meters=>(meters*100).toFixed(1)+' cm';
+      if(guide?.state==='running'){
+        const phase=d.guidedPhases[guide.phaseId];
+        guideSignal.hidden=guide.paused || !phase?.accelerationPeakMps2;
+        if(!guideSignal.hidden)guideSignal.textContent='Pico de aceleración de este tramo: ' +
+          xyz(phase.accelerationPeakMps2) + ' m/s² · Ventanas con señal suficiente: ' +
+          (phase.integratedWindows-phase.weakWindows);
+      }
+      $('metrics').textContent = [
+        'Sensores: ' + d.permission + ' · ' + d.motionEvents + ' eventos, ' + d.samples + ' con aceleración y giro, ' + d.usableSamples + ' utilizables',
+        'Intervalo mediano: ' + ms(d.medianIntervalMs) + ' · mayor hueco: ' + ms(d.largestGapMs),
+        'Poses ópticas: ' + d.visualFrames + ' · intervalo mediano: ' + ms(d.medianVisualIntervalMs),
+        'Ventanas evaluadas: ' + d.windowsEvaluated + ' · aceptadas: ' + d.windowsAccepted + ' · vigentes: ' + d.pairedWindows,
+        'Descartes: ' + rejected.sensorGap + ' huecos de sensor · ' +
+          (rejected.sensorCoverage + rejected.visualCoverage) + ' sin cobertura · ' +
+          (rejected.weakVisualMotion + rejected.weakInertialMotion) + ' con poco movimiento',
+        'Interrupciones: ' + (interrupted.trackingLost + interrupted.poseGap) + ' pérdidas o huecos de pose · ' +
+          (interrupted.relocalized + interrupted.keyframeCorrection + interrupted.mapReset) + ' cambios de mapa o pose',
+        'Ajustes de escala: ' + d.fitAttempts + ' · residuo vigente: ' + percent(d.relativeResidual),
+        'Último análisis de desfase: ' + timing.comparableWindows + ' ventanas · ' +
+          (timing.estimatedOffsetMs === null ? 'sin estimación concluyente' : ms(timing.estimatedOffsetMs)) +
+          ' · residuo sin desfase / mejor: ' + percent(timing.zeroOffsetResidual) + ' / ' + percent(timing.bestResidual),
+        'Escala estimada: ' + (d.metersPerUnit === null ? 'pendiente' : d.metersPerUnit.toFixed(4) + ' m/unidad'),
+        ...comparisons.map(([id,result])=>id+' · '+(result.estimatedMeters===null
+          ?'sin estimación en metros ('+result.visualCoverageMs+' ms de poses)'
+          :cm(result.estimatedMeters)+(result.absoluteErrorMeters===null?'':' · error absoluto '+cm(result.absoluteErrorMeters)))),
+        ...(baseline?.accelerationStdDevMps2 ? ['Ruido inicial X / Y / Z: ' + xyz(baseline.accelerationStdDevMps2) + ' m/s²'] : []),
+        ...(baseline?.maxExcursionUnits!=null?[
+          'Excursión máxima en reposo: '+baseline.maxExcursionUnits.toFixed(3)+' unidades · poses retenidas: '+baseline.stationaryPoses+'/'+baseline.visualPoses,
+        ]:[]),
+        ...Object.entries(d.guidedMotion?.returnChecks??{}).map(([id,result])=>{
+          const direct=result.visualReference?.verification;
+          const status=direct?.status??result.visualReference?.capture.status;
+          return id+' · trayectoria: '+(result.errorUnits===null?'sin cobertura':result.errorUnits.toFixed(3)+' unidades')+
+            (direct?.status==='verified'?' · referencia directa: '+direct.directReturnUnits.toFixed(3)+' unidades · diferencia con trayectoria: '+
+              direct.trajectoryDeltaUnits.toFixed(3)+' unidades · cambio de imagen: '+direct.medianImageShiftPx.toFixed(1)+' px':
+              ' · referencia: '+(status==='captured'?'pendiente':status==='insufficient-support'?'sin coincidencias suficientes':'no disponible'));
+        }),
+        ...pulses.map(([id,phase])=>
+          id + ' · picos X / Y / Z: ' +
+          xyz(phase.accelerationPeakMps2) + ' m/s² · ventanas débiles: ' + phase.weakWindows + '/' + phase.integratedWindows +
+          ' · poses: ' + phase.visualPoses),
+        ...(signal ? [
+          (d.motionSignal.guidedWeak ? 'Ventanas débiles de la prueba guiada' : 'Ventanas débiles de la sesión') + ', por eje X / Y / Z',
+          'Aceleración RMS en teléfono: ' + xyz(signal.deviceAccelerationRmsMps2) + ' m/s²',
+          'Aceleración RMS en mapa: ' + xyz(signal.worldAccelerationRmsMps2) + ' m/s²',
+          'Integral neta RMS: ' + xyz(signal.integratedRmsMeters) + ' m',
+          'Integral absoluta media: ' + xyz(signal.meanAbsoluteIntegralMeters) + ' m',
+        ] : []),
+      ].join('\n');
+    }
+    buttons();
+  };
+
+  engine.onPose((_matrix, pose) => {
+    if (mode === 'webxr' && pose.backend === 'webxr') { bar.visible = true; return; }
+    if (mode !== 'optical-flow') return;
+    const ready = pose.scaleSource === 'experimental-inertial' && pose.surfaceDetected;
+    if (ready) {
+      lastOpticalPose = pose.timestampMs;
+      status.textContent = placed ? 'Barra colocada. Compara los extremos con tu cinta.' : 'Escala estimada y suelo listo. Pulsa Mostrar barra de 2 m.';
+    }
+    bar.visible = Boolean(ready && placed);
+  });
+  engine.onStatus(message => {
+    if (message === 'odometry-map-reset') { placed = false; bar.visible = false; lastOpticalPose = -Infinity; }
+    if (message === 'odometry-lost' || message === 'camera-suspended') {
+      pauseGuide();
+      bar.visible = false; lastOpticalPose = -Infinity;
+      status.textContent = 'Seguimiento interrumpido. Vuelve a encuadrar el área escaneada.';
+    }
+    if (message === 'xr-ended') void finish('Sesión WebXR finalizada.');
+  });
+  engine.onSurface(() => {
+    if (mode === 'webxr' && !nativeReady) {
+      nativeReady = true;
+      status.textContent = 'Superficie encontrada. Toca dentro de la sesión para colocar la barra.';
+    }
+  });
+  async function finish(message) {
+    if (!mode || stopping) return;
+    stopping = true;
+    opticalReady = false;
+    endGuide('interrupted','Prueba guiada interrumpida.');
+    bar.visible = false;
+    await engine.stop();
+    report?.recorder.stop();
+    mode = null;
+    stopping = false;
+    status.textContent = message;
+    updateMetrics();
+  }
+  function fail(error) {
+    report?.recorder.recordError(error);
+    document.dispatchEvent(new CustomEvent('ar-error',{detail:error}));
+    void finish(error.message);
+  }
+  engine.onError(fail);
+
+  function begin(backend) {
+    mode = backend;
+    opticalReady = false; guide = null; guideStatus.hidden = true; guideSignal.hidden = true;
+    placed = false; nativeReady = false; lastOpticalPose = -Infinity;
+    report?.recorder.stop();
+    report = {optical:backend === 'optical-flow', recorder:new ARDiagnostics(engine, {
+      configuration:{mode:'slam', backend, performance:'balanced'},
+    })};
+    save.disabled = false;
+    $('metrics').textContent = '';
+    buttons();
+  }
+
+  optical.onclick = async () => {
+    begin('optical-flow');
+    const run = report;
+    try {
+      // Safari necesita solicitar el permiso dentro de la acción del botón.
+      status.textContent = 'Esperando acceso a los sensores de movimiento…';
+      const granted = await metric.start();
+      if (report !== run || mode !== 'optical-flow' || stopping) return;
+      await engine.enableSLAM({backend:'optical-flow', placement:'hit-test'});
+      if (report === run && !stopping && mode === 'optical-flow') opticalReady = granted;
+      if (mode === 'optical-flow' && !stopping) status.textContent = granted
+        ? 'Mueve el teléfono de lado a lado sobre un suelo con textura.'
+        : 'Sensores no disponibles o permiso denegado. La cámara sigue en modo relativo; la barra métrica permanece oculta.';
+    } catch (error) { if (report === run && mode && !stopping) fail(error); }
+  };
+  xr.onclick = async () => {
+    begin('webxr');
+    status.textContent = 'Apunta al suelo y toca la superficie dentro de WebXR.';
+    try {
+      // La sesión nativa ya entrega unidades en metros.
+      await engine.enableSLAM({backend:'webxr', placement:'hit-test'});
+    } catch (error) { if (mode && !stopping) fail(error); }
+  };
+  place.onclick = () => {
+    if (performance.now()-lastOpticalPose <= 650) {
+      placed = true;
+      buttons();
+    }
+  };
+  stop.onclick = () => { void finish('Sesión detenida.'); };
+  save.onclick = () => {
+    if (!report) return;
+    const data = {...report.recorder.snapshot(), ...(report.optical ? {metricScale:snapshot()} : {})};
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'webar-28-escala-metrica.json'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  };
+  const timer = setInterval(updateMetrics, 350);
+  buttons();
+  status.textContent = 'Elige cómo iniciar el seguimiento.';
+  navigator.xr?.isSessionSupported('immersive-ar').then(supported => {
+    nativeSupported = supported; buttons();
+  }).catch(() => {});
+  addEventListener('pagehide', () => {
+    endGuide('interrupted','Prueba guiada interrumpida.');
+    clearInterval(timer); report?.recorder.stop(); void app.dispose(); geometry.dispose(); material.dispose();
+  }, {once:true});
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)endGuide('interrupted','Prueba guiada interrumpida al ocultar la página.');
+  });
+});
+</script>
+</body>
+</html>

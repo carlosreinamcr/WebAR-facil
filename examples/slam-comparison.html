@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Comparación de SLAM por cámara</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#edf3f8;color:#142b40;font:16px/1.5 system-ui}
+    main{max-width:900px;margin:auto;padding:12px}
+    h1{font-size:1.4rem;margin:0}
+    webar-scene{height:65dvh;min-height:350px}
+    button,select{font:inherit;padding:.5em}
+    dl{display:grid;grid-template-columns:1fr auto;gap:.3em 1em}
+    dd{margin:0;text-align:right}
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Comparación de SLAM por cámara</h1>
+    <p>Usa el mismo suelo, iluminación y recorrido en ambos teléfonos. Prueba primero con Automático. Si quieres comparar Ahorro, detén la sesión y repite el recorrido.</p>
+    <label>Perfil de cámara
+      <select id="profile"><option value="auto">Automático</option><option value="battery">Ahorro</option></select>
+    </label>
+    <p id="step" role="status">Pulsa Iniciar AR. Desplaza el teléfono hacia un lado, sigue la guía y confirma con Colocar aquí.</p>
+    <webar-scene id="ar" mode="slam" backend="optical-flow" placement="manual" performance="auto" diagnostics>
+      <p>Cargando SDK… Abre esta página mediante HTTPS en el teléfono.</p>
+      <webar-model src="../dist/models/demo-plain.glb" size="0.8"></webar-model>
+    </webar-scene>
+    <dl>
+      <dt>Primera superficie</dt><dd id="surface">—</dd>
+      <dt>Primera colocación</dt><dd id="placed">—</dd>
+      <dt>Pérdidas de odometría después de colocar</dt><dd id="losses">0</dd>
+      <dt>Caducidades de pose después de colocar</dt><dd id="stale">0</dd>
+      <dt>Última recuperación del ancla</dt><dd id="recovery">—</dd>
+    </dl>
+    <button type="button" id="finish" disabled>Finalizar prueba</button>
+    <p>En XAMPP, el panel del recolector confirma el envío automático. En otros servidores puedes usar Descargar diagnóstico.</p>
+  </main>
+  <script>
+    addEventListener('DOMContentLoaded', () => {
+      const byId = id => document.getElementById(id);
+      const scene = byId('ar'), profile = byId('profile'), step = byId('step'), finish = byId('finish');
+      const instructions = 'Desplaza el teléfono hacia un lado y confirma con Colocar aquí.';
+      const seconds = ms => ms === null ? '—' : (ms / 1000).toFixed(2) + ' s';
+      let started = null, surface = null, placed = null, lostAt = null, recovery = null, losses = 0, stale = 0, timer;
+
+      function render() {
+        byId('surface').textContent = seconds(surface);
+        byId('placed').textContent = seconds(placed);
+        byId('losses').textContent = String(losses);
+        byId('stale').textContent = String(stale);
+        byId('recovery').textContent = seconds(recovery);
+      }
+
+      // Las observaciones viajan en el mismo JSON que el resto del diagnóstico.
+      function observe(id, result, notes = '') {
+        scene.diagnostics?.observe(id, result, notes);
+      }
+
+      profile.onchange = () => scene.setAttribute('performance', profile.value);
+      scene.addEventListener('ar-status', ({detail: {message}}) => {
+        if (message === 'camera-requesting') {
+          clearTimeout(timer);
+          started = surface = placed = lostAt = recovery = null;
+          losses = stale = 0;
+          profile.disabled = true;
+          finish.disabled = false;
+          step.textContent = instructions;
+          render();
+        }
+        if (message === 'scan-floor' && started === null) {
+          started = performance.now();
+          observe('slam-comparison-placement', 'pending', 'Inicio del escaneo óptico.');
+          timer = setTimeout(() => {
+            if (placed !== null) return;
+            observe('slam-comparison-placement', 'fail', 'Sin colocación en 45 s.');
+            step.textContent = 'Han pasado 45 s sin colocar. Puedes continuar o finalizar y guardar el intento.';
+          }, 45000);
+        }
+        if (message === 'odometry-lost' && placed !== null) {
+          losses++;
+          observe('slam-comparison-odometry-loss', 'pending', 'Pérdidas de odometría: ' + losses);
+          step.textContent = 'Seguimiento perdido. Descubre la cámara y vuelve al encuadre original.';
+          render();
+        }
+        if (message === 'odometry-map-reset' && placed !== null) {
+          lostAt = null;
+          observe('slam-comparison-map-reset', 'fail', 'Se perdió el mapa original; hace falta volver a colocar.');
+          step.textContent = 'El mapa se reinició. Busca una superficie y confirma de nuevo.';
+          render();
+        }
+      });
+
+      scene.addEventListener('ar-placement-stale', () => {
+        if (placed === null) return;
+        stale++;
+        observe('slam-comparison-stale', 'pending', 'Caducidades de pose: ' + stale);
+        step.textContent = 'Esperando una pose reciente. Mantén el encuadre.';
+        render();
+      });
+
+      scene.addEventListener('ar-placement', ({detail: {state}}) => {
+        if (started === null) return;
+        const now = performance.now();
+        if (state === 'surface-found' && surface === null) {
+          surface = now - started;
+          observe('slam-comparison-surface', 'pass', 'Tiempo desde escaneo: ' + seconds(surface));
+          step.textContent = 'Superficie detectada. Pulsa Colocar aquí.';
+        }
+        if (state === 'placed' && placed === null) {
+          clearTimeout(timer);
+          placed = now - started;
+          observe('slam-comparison-placement', 'pass', 'Tiempo desde escaneo: ' + seconds(placed));
+          step.textContent = 'Mantén el encuadre 5 s. Cubre la cámara durante 3 s y vuelve a mostrar la misma zona.';
+        } else if (state === 'lost' && placed !== null && lostAt === null) {
+          lostAt = now;
+          observe('slam-comparison-loss', 'pending', 'Contenido oculto mientras se recupera una pose.');
+        } else if (state === 'placed' && lostAt !== null) {
+          recovery = now - lostAt;
+          lostAt = null;
+          observe('slam-comparison-recovery', 'pass', 'Tiempo desde pérdida: ' + seconds(recovery));
+          step.textContent = 'Ancla recuperada. Finaliza la prueba para guardar la sesión.';
+        }
+        render();
+      });
+
+      scene.addEventListener('ar-error', ({detail}) => {
+        step.textContent = detail.message;
+        if (!scene.engine) {
+          clearTimeout(timer);
+          profile.disabled = false;
+          finish.disabled = true;
+        }
+      });
+      scene.addEventListener('ar-stopped', () => {
+        clearTimeout(timer);
+        profile.disabled = false;
+        finish.disabled = true;
+      });
+      finish.onclick = async () => {
+        finish.disabled = true;
+        if (placed === null) observe('slam-comparison-placement', 'fail', 'Sesión finalizada sin colocar.');
+        if (lostAt !== null) observe('slam-comparison-recovery', 'fail', 'Sesión finalizada sin recuperar el ancla.');
+        await scene.stop();
+        step.textContent = 'Sesión finalizada. Revisa la confirmación del recolector o descarga el informe.';
+      };
+    });
+  </script>
+</body>
+</html>

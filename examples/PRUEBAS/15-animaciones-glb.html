@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>15. Elegir animaciones de un GLB</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; color: #142b40; background: #edf3f8; font: 16px/1.4 system-ui; }
+    header { padding: 12px; } h1 { font-size: 21px; margin: 4px 0; } p { margin: 8px 0; }
+    a { color: #075ea8; } button, input, select { font: inherit; padding: 8px; max-width: 100%; }
+    button { margin: 3px; cursor: pointer; } label { display: inline-block; margin: 5px; }
+    input[type="range"] { width: 170px; } pre { padding: 12px; white-space: pre-wrap; }
+    webar-scene { display: block; height: 62vh; height: 62dvh; min-height: 320px; }
+  </style>
+  <!-- SDK local, con Three.js incluido. No necesitas otro script Three.js.
+       Mantener esta ruta si PRUEBAS, dist y assets son carpetas hermanas.
+       En este repositorio Vite resuelve examples/dist al SDK de la raíz.
+       El empaquetado adapta la ruta al generar dist/examples/PRUEBAS. -->
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Galería</a>
+    <h1>15. Elegir animaciones de un GLB</h1>
+  <p class="example-documentation" data-doc-en="interaction.html#choose-and-control-animations"><a href="../../docs/recipes.html#ver-los-nombres-de-animacion">Cómo desarrollar este ejemplo</a></p>
+    <p>El GLB incluido contiene Giro, Salto y Asentir. Puedes sustituirlo por otro GLB con clips propios.</p>
+    <p><a href="../assets/marcador.jpg" target="_blank" rel="noopener">Abrir marcador</a> en otra pantalla o imprimirlo.</p>
+    <label>Animación <select id="clip" disabled></select></label>
+    <button id="pause" type="button" disabled>Pausar</button>
+    <button id="resume" type="button" disabled>Continuar</button>
+    <label>Velocidad <input id="speed" type="range" min="0.25" max="3" step="0.25" value="1" disabled></label>
+    <p id="message" role="status">Pulsa Iniciar AR en la escena. Utiliza HTTP/HTTPS; en teléfonos, HTTPS.</p>
+  </header>
+  <webar-scene id="ar" performance="auto" diagnostics>
+    <p>Cargando SDK… Si este texto permanece, revisa ../dist/webar-facil.min.js.</p>
+    <!-- El JPG se compila automáticamente; 0.2 es el ancho impreso en metros. -->
+    <webar-target src="../assets/marcador.jpg" target-id="poster" physical-width="0.2">
+      <webar-model id="model" src="../assets/animaciones.glb" size="0.2"></webar-model>
+    </webar-target>
+  </webar-scene>
+  <script>
+    // defer carga el SDK antes de DOMContentLoaded. Aquí solo conectamos la UI.
+    addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('#ar'), message = document.querySelector('#message');
+      scene.addEventListener('ar-error', event => { message.textContent = event.detail.message; });
+      const model = document.querySelector('#model'), select = document.querySelector('#clip');
+      const controls = [...document.querySelectorAll('header button, header select, header input')];
+      scene.addEventListener('ar-ready', () => {
+        select.replaceChildren();
+        // Consultar nombres reales del GLB, en vez de inventar nombres de animación.
+        for (const clip of model.model.animations) select.add(new Option(clip.name, clip.name));
+        controls.forEach(control => { control.disabled = !model.model.animations.length; });
+        message.textContent = select.options.length ? 'Elige un clip; pausar no detiene el seguimiento.' : 'Este GLB no tiene animaciones.';
+      });
+      scene.addEventListener('ar-stopped', () => controls.forEach(control => { control.disabled = true; }));
+      select.onchange = () => { model.setAttribute('animation', select.value); };
+      document.querySelector('#pause').onclick = () => model.setAttribute('animation-paused', '');
+      document.querySelector('#resume').onclick = () => model.removeAttribute('animation-paused');
+      document.querySelector('#speed').oninput = event => model.setAttribute('animation-speed', event.target.value);
+    });
+  </script>
+</body>
+</html>

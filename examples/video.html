@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">
+<title>MP4 y chroma key sobre una imagen</title>
+<style>body{margin:0;font:16px system-ui;background:#15202a;color:white}header{padding:12px}#view{height:65vh;height:65dvh;width:100%}</style>
+</head>
+<body>
+<header><label>MP4 <input id="file" type="file" accept="video/mp4,.mp4"></label>
+  <label><input id="chroma" type="checkbox" checked>Quitar fondo verde</label>
+  <button id="start">Iniciar cámara</button><button id="play" disabled>Reproducir vídeo</button><button id="stop" disabled>Detener</button><p id="status">Usa el vídeo incluido o elige tu propio MP4.</p>
+</header><div id="view"></div>
+<script src="../dist/webar-facil.min.js"></script>
+<script>
+  const {ThreeARScene,ThreeARVideo}=WebARFacil;
+  const app=new ThreeARScene({container:document.querySelector('#view'),engineOptions:{opencvURL:new URL('../vision/opencv.js',location.href),keepContentOnLost:true}});
+  const video=new ThreeARVideo({width:.2,muted:true,loop:true,chromaKey:{color:'#00ff00'}});app.addContent('poster',video);
+  const start=document.querySelector('#start'),stop=document.querySelector('#stop'),message=document.querySelector('#status');
+  const ready=video.setSource('./assets/VideoChroma.mp4').then(()=>{
+    document.querySelector('#play').disabled=false;
+  }).catch(error=>{message.textContent=error.message;});
+  document.querySelector('#file').onchange=async event=>{
+    const file=event.target.files[0];if(!file)return;
+    try{await video.setSource(file);document.querySelector('#play').disabled=false;document.querySelector('#status').textContent='Vídeo listo.';}
+    catch(error){document.querySelector('#status').textContent=error.message;}
+  };
+  document.querySelector('#chroma').onchange=event=>video.setChromaKey(event.target.checked?{color:'#00ff00',similarity:.12,smoothness:.08,spill:.3}:false);
+  // Gesto explícito: también funciona cuando Safari bloquea autoplay.
+  document.querySelector('#play').onclick=()=>video.play().catch(error=>document.querySelector('#status').textContent=error.message);
+  start.onclick=async()=>{
+    start.disabled=true;
+    try{await app.engine.startCamera();await ready;await app.engine.addImageTarget('poster','./assets/marcador.jpg');stop.disabled=false;}
+    catch(error){await app.engine.stop();message.textContent=error.message;start.disabled=false;}
+  };
+  stop.onclick=async()=>{stop.disabled=true;video.pause();await app.engine.stop();start.disabled=false;};
+  // No se pausa ni rebobina por targetLost: reproducción y tracking son independientes.
+  addEventListener('pagehide',()=>{void app.dispose();});
+</script>
+</body>
+</html>

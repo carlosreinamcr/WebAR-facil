@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>26. Elegir dónde colocar un modelo con SLAM</title>
+  <style>
+    body{margin:0;background:#edf3f8;color:#142b40;font:16px/1.5 system-ui}
+    main{max-width:850px;margin:auto;padding:12px}
+    h1{font-size:1.35rem}
+    button{font:inherit;padding:9px;margin:0 6px 6px 0}
+    #view{position:relative;display:grid;place-items:center;height:65dvh;min-height:320px;background:#102231;overflow:hidden}
+    #aim{position:absolute;z-index:1;top:50%;left:50%;translate:-50% -50%;width:24px;height:24px;pointer-events:none;
+      border:1px solid #8bebff;border-radius:50%;box-shadow:0 0 4px #102231}
+    #aim::before,#aim::after{content:"";position:absolute;top:50%;left:50%;translate:-50% -50%;background:#8bebff}
+    #aim::before{width:14px;height:1px}#aim::after{width:1px;height:14px}
+    [hidden]{display:none!important}
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+<main>
+  <a href="./index.html">← Galería de ejemplos</a>
+  <h1>26. Colocación con mira y cuadrícula local</h1>
+  <p class="example-documentation" data-doc-en="placement.html"><a href="../../docs/placement.html#guia-de-escaneo-en-odometria-optica">Cómo desarrollar este ejemplo</a></p>
+  <p>Inicia la cámara, apunta a una zona con textura y pulsa <strong>Escanear aquí</strong>. Desplaza el teléfono un poco hacia un lado manteniendo la mira sobre la zona. Confirma cuando aparezca la cuadrícula.</p>
+  <button id="start" type="button">Iniciar cámara</button>
+  <button id="scan" type="button" disabled>Escanear aquí</button>
+  <button id="place" type="button" disabled>Colocar aquí</button>
+  <button id="restart" type="button" disabled>Otra zona</button>
+  <button id="stop" type="button" disabled>Detener</button>
+  <p id="message" role="status">Pulsa Iniciar cámara.</p>
+  <div id="view"><div id="aim" hidden aria-hidden="true"></div></div>
+</main>
+<script>
+addEventListener('DOMContentLoaded', () => {
+  const byId = id => document.getElementById(id);
+  const {start,scan,place,restart,stop,view,aim,message} = Object.fromEntries(
+    ['start','scan','place','restart','stop','view','aim','message'].map(id => [id,byId(id)]));
+  const sdk = globalThis.WebARFacil;
+  if (!sdk) {
+    start.disabled = true;
+    message.textContent = 'No se cargó el SDK. Revisa la ruta del script y abre mediante HTTPS en el teléfono.';
+    return;
+  }
+  const {THREE,ThreeARScene,ThreeARModel} = sdk;
+  const sdkURL = document.querySelector('script[src*="webar-facil.min.js"]').src;
+  const region = {x:.26,y:.30,width:.48,height:.40};
+  let session = null;
+
+  function cross(a,b,c) {
+    return (b.x-a.x)*(c.z-a.z)-(b.z-a.z)*(c.x-a.x);
+  }
+
+  // Envolvente convexa de los puntos, en coordenadas locales XZ del plano.
+  function hull(points) {
+    const sorted = [...points].sort((a,b) => a.x-b.x || a.z-b.z);
+    function half(list) {
+      const result = [];
+      for (const point of list) {
+        while (result.length >= 2 && cross(result.at(-2),result.at(-1),point) <= 0) result.pop();
+        result.push(point);
+      }
+      return result.slice(0,-1);
+    }
+    return half(sorted).concat(half(sorted.reverse()));
+  }
+
+  function findPatch(map,camera,pose) {
+    const matrix = new THREE.Matrix4().fromArray(pose.worldMatrix);
+    const inverse = matrix.clone().invert();
+    const origin = camera.getWorldPosition(new THREE.Vector3());
+    const direction = new THREE.Vector3(0,0,.5).unproject(camera).sub(origin).normalize();
+    const normal = new THREE.Vector3().setFromMatrixColumn(matrix,1);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal,new THREE.Vector3().setFromMatrixPosition(matrix));
+    const hit = new THREE.Ray(origin,direction).intersectPlane(plane,new THREE.Vector3());
+    if (!hit || Math.abs(normal.dot(direction)) < .15) return null;
+    const distance = origin.distanceTo(hit);
+    if (!(distance > 0)) return null;
+    const center = hit.clone().applyMatrix4(inverse);
+    const points = new Map();
+    const position = new THREE.Vector3();
+    const step = distance * .012;
+
+    // Usar puntos del mapa cercanos al plano y visibles dentro de la región.
+    // Descartar duplicados que aparecen en varios fotogramas clave.
+    for (const {points: xyz} of map.keyframes) {
+      for (let i=0; i<xyz.length; i+=3) {
+        position.fromArray(xyz,i);
+        const local = position.clone().applyMatrix4(inverse);
+        if (Math.abs(local.y) > distance*.035 || Math.hypot(local.x-center.x,local.z-center.z) > distance*.42) continue;
+        const pixel = position.project(camera);
+        if (pixel.z < -1 || pixel.z > 1 || Math.abs(pixel.x) > region.width || Math.abs(pixel.y) > region.height) continue;
+        points.set(Math.round(local.x/step)+','+Math.round(local.z/step),local);
+      }
+    }
+    if (points.size < 6) return null;
+    const outline = hull(points.values());
+    if (outline.length < 3) return null;
+
+    // Un cuadrado inscrito cabe dentro de la envolvente. Si el rayo cae fuera,
+    // o muy cerca del borde, esperar otra vista en vez de extender la cuadrícula.
+    let clearance = Infinity;
+    for (const [i,a] of outline.entries()) {
+      const b = outline[(i+1)%outline.length];
+      clearance = Math.min(clearance,cross(a,b,center)/Math.hypot(b.x-a.x,b.z-a.z));
+    }
+    const side = 2*Math.min(clearance/Math.SQRT2,distance*.14);
+    if (side < distance*.035) return null;
+    return {center,side};
+  }
+
+  function disposeGrid(current) {
+    current.grid?.removeFromParent();
+    current.grid?.dispose();
+    current.grid = null;
+  }
+
+  function present(current,patch) {
+    const {anchor,model} = current;
+    const grid = new THREE.GridHelper(patch.side,6,0x8bebff,0x38d9ff);
+    grid.position.set(patch.center.x,0,patch.center.z);
+    grid.material.transparent = true;
+    grid.material.opacity = .85;
+    grid.material.depthWrite = false;
+    anchor.add(grid);
+    current.grid = grid;
+    model.position.copy(grid.position);
+    model.setSize(patch.side*.8);
+    place.disabled = false;
+    aim.hidden = true;
+    message.textContent = 'Zona localizada. Confirma con Colocar aquí o elige otra zona.';
+  }
+
+  async function checkPatch(current) {
+    if (current.checking || current.grid || current.placed || performance.now() < current.retryAt) return;
+    current.checking = true;
+    current.retryAt = performance.now()+450;
+    try {
+      const {map} = await current.app.engine.exportSLAMMap();
+      if (session !== current || !current.pose || current.grid || current.placed ||
+          performance.now()-current.pose.timestampMs>700) return;
+      if (!map.groundPlane?.worldFromPlane.every((value,i) => value === current.pose.worldMatrix[i])) return;
+      const patch = findPatch(map,current.app.camera,current.pose);
+      if (patch) present(current,patch);
+      else message.textContent = 'Hay un plano candidato. Apunta al interior de la zona y desplázate un poco más.';
+    } catch {
+      // El mapa puede no tener aún un fotograma clave. Otra pose reintenta.
+    } finally {
+      current.checking = false;
+    }
+  }
+
+  async function close() {
+    const current = session;
+    session = null;
+    scan.disabled = place.disabled = restart.disabled = stop.disabled = true;
+    aim.hidden = true;
+    if (current) {
+      disposeGrid(current);
+      try { await current.app.dispose(); }
+      finally { current.detach?.(); }
+    }
+    start.disabled = false;
+  }
+
+  async function open() {
+    start.disabled = true;
+    message.textContent = 'Abriendo cámara…';
+    const app = new ThreeARScene({container:view,engineOptions:{
+      opencvURL:new URL('vision/opencv.js',sdkURL),
+      // La API existente aplica esta región al estimar el plano de esta escena.
+      fallback:{floorROI:region},
+    }});
+    const model = new ThreeARModel();
+    model.visible = false;
+    app.addContent('default',model);
+    const current = {app,model,anchor:app.getAnchor(),pose:null,grid:null,placed:false,checking:false,retryAt:0};
+    session = current;
+    current.detach = globalThis.WebARLocalReports?.attachEngine(app.engine,{
+      configuration:{mode:'slam',backend:'optical-flow',performance:'auto'},getRenderer:()=>app.renderer,
+    });
+    app.engine.onPose((_matrix,pose) => {
+      if (session !== current || pose.backend !== 'optical-flow' || !pose.surfaceDetected) return;
+      current.pose = pose;
+      if (current.grid) place.disabled = performance.now()-pose.timestampMs>700;
+      else if (!current.placed) void checkPatch(current);
+    });
+    app.engine.onStatus(status => {
+      if (session !== current) return;
+      if (['odometry-lost','odometry-map-reset','camera-suspended'].includes(status)) {
+        current.pose = null;
+        disposeGrid(current);
+        if (status === 'odometry-map-reset') {
+          current.placed = false;
+          model.visible = false;
+        }
+        place.disabled = true;
+        aim.hidden = current.placed;
+        message.textContent = 'Vuelve a mirar la zona que estabas escaneando.';
+      }
+    });
+    app.onRender(() => {
+      if (!current.grid || !current.pose) return;
+      const age = performance.now()-current.pose.timestampMs;
+      place.disabled = age > 700;
+      if (age <= 1000) return;
+      disposeGrid(current);
+      place.disabled = true;
+      aim.hidden = false;
+      message.textContent = 'Espera una vista reciente de la zona seleccionada.';
+    });
+    app.engine.onError(error => { if (session === current) void fail(error); });
+    await app.engine.startCamera();
+    if (session !== current) return;
+    await model.load('../assets/robot.glb');
+    if (session !== current) return;
+    stop.disabled = scan.disabled = false;
+    aim.hidden = false;
+    message.textContent = 'Encuadra la superficie con la mira y pulsa Escanear aquí.';
+  }
+
+  async function beginScan() {
+    const current = session;
+    if (!current) return;
+    scan.disabled = true;
+    restart.disabled = false;
+    message.textContent = 'Mueve el teléfono lateralmente sin apartar la mira de la zona.';
+    await current.app.engine.enableSLAM({backend:'optical-flow',placement:'hit-test'});
+  }
+
+  async function fail(error) {
+    await close();
+    message.textContent = error instanceof Error ? error.message : String(error);
+  }
+
+  start.onclick = () => { void open().catch(fail); };
+  scan.onclick = () => { void beginScan().catch(fail); };
+  stop.onclick = () => { void close().then(() => { message.textContent = 'Cámara detenida.'; },fail); };
+  restart.onclick = () => { void close().then(open).catch(fail); };
+  place.onclick = () => {
+    const current = session;
+    if (!current?.grid || !current.pose || performance.now()-current.pose.timestampMs>700) return;
+    disposeGrid(current);
+    current.placed = true;
+    current.model.visible = true;
+    place.disabled = true;
+    message.textContent = 'Modelo colocado en la zona señalada.';
+  };
+  addEventListener('pagehide',() => { void close(); });
+});
+</script>
+</body>
+</html>

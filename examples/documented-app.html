@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Mi aplicación WebAR</title>
+  <style>
+    body{margin:0;background:#15202a;color:white;font:16px system-ui}
+    header{padding:12px}#view{width:100%;height:75vh;height:75dvh}button{padding:10px}
+  </style>
+</head>
+<body>
+  <header>
+    <button id="start">Iniciar cámara</button>
+    <button id="stop" disabled>Detener</button>
+    <p id="status" role="status">Apunta al marcador de ejemplo.</p>
+  </header>
+  <div id="view"></div>
+  <!-- En dist/examples el empaquetador cambia ../dist/ por ../. -->
+  <script src="../dist/webar-facil.min.js"></script>
+  <script>
+    // 1. El script standalone incluye Three.js y publica WebARFacil.
+    const {ThreeARScene,ThreeARModel}=WebARFacil;
+    const start=document.querySelector('#start');
+    const stop=document.querySelector('#stop');
+    const status=document.querySelector('#status');
+    const report=error=>{status.textContent=error instanceof Error?error.message:String(error);};
+
+    // 2. La escena crea cámara, fondo, luces, renderer y bucle de animación.
+    const app=new ThreeARScene({
+      container:document.querySelector('#view'),
+      engineOptions:{
+        opencvURL:new URL('../vision/opencv.js',location.href),
+        imageLossGraceMs:500,
+        keepContentOnLost:false,
+      },
+    });
+
+    // 3. El ID enlaza el contenido con su marcador; no es el nombre del GLB.
+    const model=new ThreeARModel({
+      dracoDecoderPath:new URL('../decoders/draco/',location.href),
+    });
+    app.addContent('poster',model);
+    app.engine.onError(report);
+    app.engine.on('targetFound',event=>{status.textContent=`Visible: ${event.targetId}`;});
+    app.engine.on('targetLost',event=>{status.textContent=`Fuera de vista: ${event.targetId}`;});
+    app.engine.on('trackingQuality',event=>{
+      // Diagnóstico heurístico: registrar o presentar ayuda sin reiniciar el modelo.
+      if(event.issues.length) console.debug(event.targetId,event.state,event.issues);
+    });
+
+    // 4. Carga bajo demanda. Las operaciones del motor se esperan en orden.
+    start.onclick=async()=>{
+      start.disabled=true;stop.disabled=true;
+      try{
+        await model.load('./assets/Kai-WebAR-Facil.glb');
+        await app.engine.startCamera();
+        // Basta JPG/PNG. El Worker compila los descriptores automáticamente.
+        const target=await app.engine.addImageTarget('poster','./assets/marcador.jpg',{
+          physicalWidthMeters:0.2,
+        });
+        console.info('Calidad del marcador',target.metadata.quality);
+        status.textContent='Busca el marcador con la cámara.';
+        stop.disabled=false;
+      }catch(error){
+        await app.engine.stop();report(error);start.disabled=false;
+      }
+    };
+    stop.onclick=async()=>{
+      stop.disabled=true;
+      try{await app.engine.stop();status.textContent='Cámara detenida.';}
+      catch(error){report(error);}
+      finally{start.disabled=false;}
+      // stop() elimina los targets: Iniciar vuelve a registrarlos.
+    };
+    // 5. El contenedor actualiza las animaciones aunque falte una pose nueva.
+    // dispose() libera recursos que pertenecen a la escena y sus modelos.
+    addEventListener('pagehide',()=>{void app.dispose();});
+  </script>
+</body>
+</html>
