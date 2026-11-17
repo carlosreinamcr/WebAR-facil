@@ -10,6 +10,7 @@ Los imports relativos se muestran en su contexto original. Estos bloques describ
 | `ARComponentsOptions` | Tipo | `webar-facil` |
 | `ARDiagnostics` | Valor y/o tipo | `webar-facil/core`, `webar-facil` |
 | `AREventMap` | Tipo | `webar-facil/core`, `webar-facil` |
+| `ARHandTapDetail` | Tipo | `webar-facil` |
 | `ARModelElement` | Tipo | `webar-facil` |
 | `ARModelLoadOptions` | Tipo | `webar-facil` |
 | `ARModelOptions` | Tipo | `webar-facil` |
@@ -174,6 +175,8 @@ export interface ImageTargetOptions {
     /** Opcional: escala de referencia de 0.2 m por defecto; no requiere medir el marcador. */
     physicalWidthMeters?: number;
     maxDimension?: number;
+    /** Experimental. Diámetro exterior de la zona cilíndrica de la etiqueta, en metros. */
+    cylinderDiameterMeters?: number;
 }
 export interface ImageTargetMetadata {
     format: 'WART';
@@ -251,7 +254,7 @@ export declare class WebAREngine {
 
 ```ts
 export declare const LIBRARY_VERSION = "0.1.0-alpha.6";
-export declare const LIBRARY_BUILD = "1c906eb944d9f8f4";
+export declare const LIBRARY_BUILD = "3e7d0e35b6e318fe";
 ```
 
 ## calibration/CalibrationSession.d.ts
@@ -943,11 +946,12 @@ export declare class Tracker {
     constructor(options?: TrackerOptions);
     get state(): 'idle' | 'busy' | 'disposed';
     get hasTarget(): boolean;
-    loadTarget(buffer: ArrayBuffer, signal?: AbortSignal, targetId?: string): Promise<void>;
+    loadTarget(buffer: ArrayBuffer, signal?: AbortSignal, targetId?: string, cylinderDiameterMeters?: number): Promise<void>;
     get targetIds(): readonly string[];
     loadTargets(targets: readonly {
         id: string;
         buffer: ArrayBuffer;
+        cylinderDiameterMeters?: number;
     }[], signal?: AbortSignal): Promise<void>;
     processFrame(frame: CameraFrame, signal?: AbortSignal, calibrationOverride?: CameraIntrinsics): Promise<TrackingResult | null>;
     /** Un RGBA y un Worker para todos los marcadores. No duplicar el frame por target. */
@@ -1131,6 +1135,21 @@ export declare function normalizedPixel(x: number, y: number, k: CameraIntrinsic
     number,
     number
 ];
+```
+
+## wrappers/HandInteraction.d.ts
+
+```ts
+import { type Object3D, type Vector3 } from 'three';
+import type { ARModelElement } from './web-components.js';
+export interface ARHandTapDetail {
+    readonly element: ARModelElement;
+    readonly object: Object3D;
+    readonly point: Vector3;
+    readonly gesture: 'pinch' | 'dwell';
+}
+/** Registra únicamente el adaptador; MediaPipe se descarga al iniciar una escena con manos. */
+export declare function registerHandInteraction(): void;
 ```
 
 ## wrappers/SurfacePlacement.d.ts

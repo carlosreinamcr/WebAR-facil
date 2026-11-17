@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>34. Seguimiento de una etiqueta curva</title>
+  <style>
+    body{margin:0;background:#edf3f8;color:#142b40;font:16px/1.5 system-ui}
+    main{max-width:860px;margin:auto;padding:14px}
+    form,.measurements{display:grid;gap:10px}
+    .measurements{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}
+    label{display:grid;gap:4px}
+    input,button{font:inherit;box-sizing:border-box;min-height:44px;max-width:100%}
+    input[type=number],button{padding:8px}
+    .actions{display:flex;flex-wrap:wrap;gap:8px}
+    #view{position:relative;display:grid;place-items:center;height:55vh;height:55dvh;min-height:280px;overflow:hidden;background:#102231;border-radius:12px}
+    #sample{display:block;width:min(100%,100mm);height:auto}
+    @media print{
+      body{background:white}
+      main{padding:0}
+      main>*:not(details),details>*:not(img){display:none}
+      #sample{width:100mm;max-width:none}
+    }
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+<main>
+  <a href="./index.html">← Galería</a>
+  <h1>34. Seguimiento de una etiqueta curva</h1>
+  <p class="example-documentation" data-doc-en="placement.html#cylindrical-label-example-34"><a href="../../docs/placement.html#etiqueta-cilindrica-ejemplo-34">Cómo desarrollar este ejemplo</a></p>
+  <p>Usa el JPG o PNG de la etiqueta desplegada y mide la parte recta del envase. Si puedes, elige papel mate. Al detectar la etiqueta, un aro abraza el envase y Kai aparece encima.</p>
+  <form id="setup">
+    <label>Imagen de la etiqueta <input id="label" type="file" accept="image/jpeg,image/png"></label>
+    <div class="measurements">
+      <label>Diámetro exterior (mm) <input id="diameter" type="number" min="1" step="any" value="66" required></label>
+      <label>Ancho sobre la curva (mm) <input id="width" type="number" min="1" step="any" value="100" required></label>
+    </div>
+    <div class="actions">
+      <button id="start" type="submit" disabled>Iniciar cámara</button>
+      <button id="stop" type="button" disabled>Detener cámara</button>
+    </div>
+  </form>
+  <p id="status" role="status">Cargando WebAR Fácil…</p>
+  <div id="view"></div>
+  <details id="print-label">
+    <summary>Etiqueta de prueba para imprimir</summary>
+    <p>Imprime a escala 100 % y verifica que el ancho sea 100 mm. Pega la etiqueta sin arrugas sobre un envase de 66 mm de diámetro o introduce su diámetro real antes de iniciar.</p>
+    <img id="sample" src="../assets/marcador.jpg" alt="Etiqueta de prueba de WebAR Fácil con el zorro Kai">
+    <p><button id="print" type="button">Imprimir etiqueta</button></p>
+  </details>
+  <p>El ancho se mide con una cinta flexible siguiendo la curva. El alto se calcula a partir de la proporción de la imagen. Esta prueba es experimental y funciona con secciones cilíndricas. Gira el envase lentamente manteniendo una porción con detalles frente a la cámara.</p>
+</main>
+<script>
+// Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+addEventListener('DOMContentLoaded',()=>{
+  const byId=id=>document.getElementById(id);
+  const form=byId('setup'),start=byId('start'),stop=byId('stop'),status=byId('status');
+  const diameterInput=byId('diameter'),widthInput=byId('width'),label=byId('label');
+  byId('print').onclick=()=>print();
+  if (!globalThis.WebARFacil) {status.textContent='No se pudo cargar WebAR Fácil.';return;}
+  const {THREE,ThreeARScene,ThreeARModel}=WebARFacil;
+  const targetId='etiqueta';
+  let session,closing=false;
+  start.disabled=false;
+  status.textContent='Elige tu etiqueta o usa la muestra y pulsa «Iniciar cámara».';
+
+  function controls(){
+    start.disabled=Boolean(session)||closing;
+    stop.disabled=!session||closing;
+    label.disabled=diameterInput.disabled=widthInput.disabled=start.disabled;
+  }
+  async function close(){
+    const active=session;
+    if (!active) return;
+    session=null;closing=true;controls();
+    try {await active.app.dispose();}
+    finally {
+      active.ring?.geometry.dispose();
+      active.ring?.material.dispose();
+      closing=false;controls();
+    }
+  }
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    if (session||closing) return;
+    const diameter=diameterInput.valueAsNumber/1000,width=widthInput.valueAsNumber/1000;
+    if (!(diameter>0&&width>=diameter*.2&&width<=Math.PI*diameter)){
+      status.textContent='Comprueba las medidas: el ancho debe cubrir un arco visible y no superar la vuelta completa.';
+      return;
+    }
+    let active;
+    try {
+      const app=new ThreeARScene({container:byId('view'),maxPixelRatio:1.5,antialias:false});
+      active=session={app};controls();
+      app.engine.onTargetFound(({targetId:id})=>{
+        if(session===active&&id===targetId) status.textContent='Etiqueta detectada. Gira lentamente para comprobar la alineación.';
+      });
+      app.engine.onTargetLost(({targetId:id,reason})=>{
+        if(session===active&&id===targetId&&reason==='lost') status.textContent='Etiqueta fuera de seguimiento. Vuelve a mostrar una parte con detalles.';
+      });
+      app.engine.onError(error=>{if(session===active)status.textContent=error.message;});
+      status.textContent='Abriendo cámara…';
+      await app.engine.startCamera();
+      if(session!==active)return;
+      status.textContent='Preparando modelo y etiqueta…';
+      const model=new ThreeARModel();
+      app.addContent(targetId,model);
+      await model.load('../assets/Kai-WebAR-Facil.glb',{fitSize:diameter*1.4});
+      if(session!==active)return;
+
+      // El origen del ancla queda en el centro del cilindro y a media altura de la etiqueta.
+      const {metadata}=await app.engine.addImageTarget(targetId,label.files[0]??byId('sample').src,
+        {physicalWidthMeters:width,cylinderDiameterMeters:diameter});
+      if(session!==active)return;
+      const height=width*metadata.height/metadata.width;
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(diameter*.55,diameter*.023,10,64),
+        new THREE.MeshBasicMaterial({color:0x68ffda}));
+      ring.rotation.x=Math.PI/2;
+      active.ring=ring;
+      app.getAnchor(targetId).add(ring);
+      model.position.y=height/2+diameter*.35;
+      status.textContent='Apunta a la etiqueta pegada en el envase.';
+    } catch(error){
+      if(active&&session!==active)return;
+      await close();
+      status.textContent=error.message;
+    }
+  };
+  stop.onclick=async()=>{
+    await close();
+    status.textContent='Cámara detenida.';
+  };
+  addEventListener('pagehide',()=>{void close();});
+});
+</script>
+</body>
+</html>

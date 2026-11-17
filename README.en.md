@@ -2,7 +2,7 @@
 
 <img src="examples/assets/marcador.jpg" alt="WebAR Fácil logo featuring a fox emerging from a phone screen" width="360">
 
-**[Official website](https://realidad-aumentada.com.co/webar-facil.html)** · **[Gallery of 31 examples](https://realidad-aumentada.com.co/webar-facil/ejemplos/)**
+**[Official website](https://realidad-aumentada.com.co/webar-facil.html)** · **[Gallery of 35 examples](https://realidad-aumentada.com.co/webar-facil/ejemplos/)**
 
 **[Español](README.md)** · **English** · [Manual](docs/en/README.md) · [Quick start](docs/en/getting-started.md)
 
@@ -17,7 +17,7 @@ An open-source TypeScript library for browser-based augmented reality. Build an 
 </webar-scene>
 ```
 
-Copy the compiled script from `dist/` and serve your project over HTTP on localhost or HTTPS on a phone. See the [complete HTML example](docs/en/getting-started.md) and the [source code for all 31 examples](examples/PRUEBAS/).
+Copy the compiled script from `dist/` and serve your project over HTTP on localhost or HTTPS on a phone. See the [complete HTML example](docs/en/getting-started.md) and the [source code for all 35 examples](examples/PRUEBAS/).
 
 The project also provides a JavaScript API, Three.js and A-Frame integrations, WebXR hit testing, and an optical tracking fallback. [Tracking modes and limits](docs/en/tracking.md)
 

@@ -14,6 +14,7 @@ import { ORB_EXTRACTOR_ID } from '../vision/features.ts';
 import { estimateIntrinsics, scaleIntrinsics } from '../vision/calibration.ts';
 import { assertRigid, assertMatrix } from '../spatial/matrices.ts';
 import type { TrackingResult,TrackingBatchResult } from './types.ts';
+import {validateCylinder} from './CylindricalTarget.ts';
 export type { TrackingResult, ImageObservation } from './types.ts';
 
 export interface TrackerOptions {
@@ -40,23 +41,26 @@ export class Tracker {
   }
   get state(): 'idle' | 'busy' | 'disposed' { return this.closed ? 'disposed' : this.rpc.busy ? 'busy' : 'idle'; }
   get hasTarget(): boolean { return this.loaded; }
-  async loadTarget(buffer: ArrayBuffer, signal?: AbortSignal,targetId='default'): Promise<void> {
+  async loadTarget(buffer: ArrayBuffer, signal?: AbortSignal,targetId='default',cylinderDiameterMeters?:number): Promise<void> {
     this.assertOpen();
     this.profile=null;
     const marker = decodeMarker(buffer);
     if (marker.simulated) throw new Error('Marcador simulado. Compilar una imagen real.');
     if (marker.extractorId !== ORB_EXTRACTOR_ID) throw new Error('Extractor incompatible con este runtime ORB.');
-    await this.rpc.request({ type: 'LOAD_TARGET', targetId,buffer, opencvURL: this.opencvURL }, [buffer], signal);
+    if(cylinderDiameterMeters!==undefined)validateCylinder(cylinderDiameterMeters,marker.physicalWidthMeters);
+    await this.rpc.request({ type: 'LOAD_TARGET', targetId,buffer, opencvURL: this.opencvURL,cylinderDiameterMeters }, [buffer], signal);
     this.assertOpen(); this.loaded = true;this.ids=[targetId];
   }
   get targetIds():readonly string[]{return [...this.ids];}
-  async loadTargets(targets:readonly {id:string;buffer:ArrayBuffer}[],signal?:AbortSignal):Promise<void>{
+  async loadTargets(targets:readonly {id:string;buffer:ArrayBuffer;cylinderDiameterMeters?:number}[],signal?:AbortSignal):Promise<void>{
     if(!targets.length||targets.length>8||new Set(targets.map(t=>t.id)).size!==targets.length||targets.some(t=>!/^[a-zA-Z0-9_-]{1,64}$/.test(t.id)))throw new Error('Usar entre 1 y 8 IDs unicos de marcador.');
     for(const[index,target]of targets.entries()){
-      if(index===0){await this.loadTarget(target.buffer,signal,target.id);continue;}
+      if(index===0){await this.loadTarget(target.buffer,signal,target.id,target.cylinderDiameterMeters);continue;}
       const marker=decodeMarker(target.buffer);
       if(marker.simulated||marker.extractorId!==ORB_EXTRACTOR_ID)throw new Error('Marcador incompatible.');
-      await this.rpc.request({type:'ADD_TARGET',targetId:target.id,buffer:target.buffer,opencvURL:this.opencvURL},[target.buffer],signal);
+      if(target.cylinderDiameterMeters!==undefined)validateCylinder(target.cylinderDiameterMeters,marker.physicalWidthMeters);
+      await this.rpc.request({type:'ADD_TARGET',targetId:target.id,buffer:target.buffer,opencvURL:this.opencvURL,
+        cylinderDiameterMeters:target.cylinderDiameterMeters},[target.buffer],signal);
       this.ids.push(target.id);
     }
   }

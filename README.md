@@ -2,7 +2,7 @@
 
 <img src="examples/assets/marcador.jpg" alt="Logo de WebAR Fácil, un zorro saliendo de la pantalla de un teléfono" width="360">
 
-**[Sitio oficial](https://realidad-aumentada.com.co/webar-facil.html)** · **[Galería de 31 ejemplos](https://realidad-aumentada.com.co/webar-facil/ejemplos/)**
+**[Sitio oficial](https://realidad-aumentada.com.co/webar-facil.html)** · **[Galería de 35 ejemplos](https://realidad-aumentada.com.co/webar-facil/ejemplos/)**
 
 Biblioteca WebAR open-source en TypeScript: seguimiento de imágenes con webcam o cámara móvil, compilación automática JPG/PNG, contenido GLB y MP4, wrappers Three.js y A-Frame, WebXR y odometría WASM como fallback. No requiere un SDK cerrado ni suscripciones.
 
@@ -21,7 +21,7 @@ Abre `http://127.0.0.1:5173/docs/` para leer la documentación con buscador, o `
 
 No abras el HTML con `file://`. Para cámara desde un teléfono necesitas HTTPS accesible y confiable para ese dispositivo. El tracking de imágenes funciona sin WebXR y sin calibración manual.
 
-**[Código de los 31 ejemplos](examples/PRUEBAS/)**. Incluye GLB, gestos, cambios de modelo, MP4, iluminación, mapas locales y el ejemplo métrico experimental.
+**[Código de los 35 ejemplos](examples/PRUEBAS/)**. Incluye GLB, gestos, cambios de modelo, MP4, iluminación, mapas locales y el ejemplo métrico experimental.
 
 Para probar los tres recorridos de la alfa, abre la [galería inicial](examples/alpha.html). Consulta la [guía de preparación de la alfa](docs/alpha-release.md).
 

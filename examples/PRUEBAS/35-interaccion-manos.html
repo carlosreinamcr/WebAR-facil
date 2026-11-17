@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>35. Interactúa con Kai usando la mano</title>
+  <style>
+    body{margin:0;background:#edf3f8;color:#142b40;font:16px/1.5 system-ui}
+    main{max-width:880px;margin:auto;padding:14px}
+    webar-scene{display:block;height:62vh;height:62dvh;min-height:320px;border-radius:14px;overflow:hidden}
+    #status{min-height:3em}
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+<main>
+  <a href="./index.html">← Galería</a>
+  <h1>35. Interactúa con Kai usando la mano</h1>
+  <p class="example-documentation" data-doc-en="placement.html#hand-interaction-example-35"><a href="../../docs/placement.html#interaccion-con-las-manos-ejemplo-35">Cómo desarrollar este ejemplo</a></p>
+  <p>Abre el <a href="../assets/marcador.jpg" target="_blank" rel="noopener">marcador</a> en otra pantalla o imprímelo. Inicia AR, apunta al marcador y muestra tu mano a la cámara. Lleva el cursor del índice sobre Kai y junta el pulgar con el índice para girarlo.</p>
+  <p id="status" role="status">Pulsa «Iniciar AR». La primera carga de MediaPipe requiere conexión.</p>
+  <webar-scene id="scene" facing-mode="environment" pixel-ratio="1.5">
+    <webar-target src="../assets/marcador.jpg" target-id="kai" physical-width="0.2">
+      <webar-model id="kai" src="../assets/Kai-WebAR-Facil.glb" size="0.18" rotation="0 180 0" animation="Waving" hand-target></webar-model>
+    </webar-target>
+    <webar-hands cursor gesture="pinch"></webar-hands>
+  </webar-scene>
+  <p>Usa la cámara trasera con buena luz y deja una parte del marcador visible junto a la mano. El gesto selecciona el modelo sobre el que apunta el cursor.</p>
+</main>
+<script>
+// Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+// Web: https://realidad-aumentada.com.co
+// Blog: https://blog.realidad-aumentada.com.co
+// YouTube: https://www.youtube.com/@carlosreinamcr
+addEventListener('DOMContentLoaded',()=>{
+  const scene=document.getElementById('scene');
+  const kai=document.getElementById('kai');
+  const status=document.getElementById('status');
+  let angle=180,count=0;
+  if (!globalThis.WebARFacil) {status.textContent='No se pudo cargar WebAR Fácil.';return;}
+  scene.addEventListener('ar-ready',()=>{status.textContent='AR lista. Cargando el detector de manos…';});
+  scene.addEventListener('hand-ready',()=>{status.textContent='Detector listo. Apunta a Kai con el índice y pellizca.';});
+  scene.addEventListener('hand-error',({detail})=>{status.textContent='No se pudo iniciar el detector de manos: '+detail.message;});
+  scene.addEventListener('ar-error',({detail})=>{status.textContent=detail.message;});
+  scene.addEventListener('ar-stopped',()=>{
+    angle=180;count=0;kai.setAttribute('rotation','0 180 0');
+    status.textContent='Cámara detenida.';
+  });
+  // El evento sale del modelo alcanzado. `detail.point` contiene el punto de impacto 3D.
+  kai.addEventListener('ar-hand-tap',()=>{
+    angle=(angle+45)%360;
+    kai.setAttribute('rotation','0 '+angle+' 0');
+    status.textContent='¡Kai giró! Interacciones: '+(++count)+'. Abre la mano antes de repetir.';
+  });
+});
+</script>
+</body>
+</html>

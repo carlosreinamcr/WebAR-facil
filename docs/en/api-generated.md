@@ -8,6 +8,7 @@ Generated from the public exports and TypeScript declarations. Relative imports 
 | `ARComponentsOptions` | Type | `webar-facil` |
 | `ARDiagnostics` | Value and/or type | `webar-facil/core`, `webar-facil` |
 | `AREventMap` | Type | `webar-facil/core`, `webar-facil` |
+| `ARHandTapDetail` | Type | `webar-facil` |
 | `ARModelElement` | Type | `webar-facil` |
 | `ARModelLoadOptions` | Type | `webar-facil` |
 | `ARModelOptions` | Type | `webar-facil` |
@@ -160,6 +161,7 @@ export interface EngineOptions {
 export interface ImageTargetOptions {
     physicalWidthMeters?: number;
     maxDimension?: number;
+    cylinderDiameterMeters?: number;
 }
 export interface ImageTargetMetadata {
     format: 'WART';
@@ -230,7 +232,7 @@ export declare class WebAREngine {
 
 ```ts
 export declare const LIBRARY_VERSION = "0.1.0-alpha.6";
-export declare const LIBRARY_BUILD = "1c906eb944d9f8f4";
+export declare const LIBRARY_BUILD = "3e7d0e35b6e318fe";
 ```
 
 ## calibration/CalibrationSession.d.ts
@@ -859,11 +861,12 @@ export declare class Tracker {
     constructor(options?: TrackerOptions);
     get state(): 'idle' | 'busy' | 'disposed';
     get hasTarget(): boolean;
-    loadTarget(buffer: ArrayBuffer, signal?: AbortSignal, targetId?: string): Promise<void>;
+    loadTarget(buffer: ArrayBuffer, signal?: AbortSignal, targetId?: string, cylinderDiameterMeters?: number): Promise<void>;
     get targetIds(): readonly string[];
     loadTargets(targets: readonly {
         id: string;
         buffer: ArrayBuffer;
+        cylinderDiameterMeters?: number;
     }[], signal?: AbortSignal): Promise<void>;
     processFrame(frame: CameraFrame, signal?: AbortSignal, calibrationOverride?: CameraIntrinsics): Promise<TrackingResult | null>;
     processTargetsFrame(frame: CameraFrame, signal?: AbortSignal): Promise<TrackingBatchResult | null>;
@@ -1042,6 +1045,20 @@ export declare function normalizedPixel(x: number, y: number, k: CameraIntrinsic
     number,
     number
 ];
+```
+
+## wrappers/HandInteraction.d.ts
+
+```ts
+import { type Object3D, type Vector3 } from 'three';
+import type { ARModelElement } from './web-components.js';
+export interface ARHandTapDetail {
+    readonly element: ARModelElement;
+    readonly object: Object3D;
+    readonly point: Vector3;
+    readonly gesture: 'pinch' | 'dwell';
+}
+export declare function registerHandInteraction(): void;
 ```
 
 ## wrappers/SurfacePlacement.d.ts

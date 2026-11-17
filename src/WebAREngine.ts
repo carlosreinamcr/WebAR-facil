@@ -5,6 +5,7 @@
  */
 import { CameraManager, type CameraFrame, type CameraManagerOptions, type CameraMetrics } from './camera/CameraManager';
 import { Tracker, type TrackerOptions } from './tracking/Tracker';
+import {validateCylinder} from './tracking/CylindricalTarget';
 import type { ImageObservation } from './tracking/types';
 import { TARGET_MAX_BYTES, decodeMarker, type MarkerQuality } from './tracking/ImageCompiler';
 import { compileWithMarkerCache } from './tools/MarkerCache';
@@ -46,6 +47,8 @@ export interface ImageTargetOptions {
   /** Opcional: escala de referencia de 0.2 m por defecto; no requiere medir el marcador. */
   physicalWidthMeters?: number;
   maxDimension?: number;
+  /** Experimental. Diámetro exterior de la zona cilíndrica de la etiqueta, en metros. */
+  cylinderDiameterMeters?:number;
 }
 export interface ImageTargetMetadata {
   format: 'WART'; version: 2; width: number; height: number;
@@ -77,7 +80,10 @@ export class WebAREngine {
   private readonly options:EngineOptions;
   private readonly camera:CameraManager;
   private tracker:Tracker|null=null;
-  private readonly targetSources=new Map<string,ArrayBuffer>();
+  private readonly targetSources=new Map<string,{buffer:ArrayBuffer;cylinderDiameterMeters?:number}>();
+  private trackingSources(sources:Iterable<[string,{buffer:ArrayBuffer;cylinderDiameterMeters?:number}]>){
+    return Array.from(sources,([id,source])=>({...source,id,buffer:source.buffer.slice(0)}));
+  }
   private readonly presentations=new Map<string,TargetPresentation>();
   private readonly observations=new Map<string,ImageObservation>();
   private activeTargetId='default';
@@ -213,6 +219,8 @@ export class WebAREngine {
       if(this.mode==='xr'||this.mode==='flow')throw new Error('Detener superficies antes de cargar un marcador.');
       const physicalWidthMeters=options.physicalWidthMeters??0.2;
       if(!Number.isFinite(physicalWidthMeters)||physicalWidthMeters<=0)throw new Error('Ancho físico inválido.');
+      const diameter=options.cylinderDiameterMeters;
+      if(diameter!==undefined)validateCylinder(diameter,physicalWidthMeters);
       let image:Blob;
       if(source instanceof Blob)image=source;
       else{
@@ -240,17 +248,18 @@ export class WebAREngine {
       const marker=decodeMarker(result.buffer);
       const metadata:ImageTargetMetadata={format:'WART',version:2,width:marker.width,height:marker.height,
         physicalWidthMeters:marker.physicalWidthMeters,extractorId:marker.extractorId,quality:result.quality};
-      await this.installTarget(result.buffer,signal,id,additive);
+      await this.installTarget(result.buffer,signal,id,additive,diameter);
       return{buffer:result.buffer,metadata};
     });
   }
 
-  private async installTarget(data:ArrayBuffer,signal:AbortSignal,id='default',additive=false):Promise<void>{
+  private async installTarget(data:ArrayBuffer,signal:AbortSignal,id='default',additive=false,cylinderDiameterMeters?:number):Promise<void>{
     if(!/^[a-zA-Z0-9_-]{1,64}$/.test(id))throw new Error('ID de marcador invalido.');
-    const sources=additive?new Map(this.targetSources):new Map<string,ArrayBuffer>();sources.set(id,data.slice(0));
+    const sources=new Map(additive?this.targetSources:[]);
+    sources.set(id,{buffer:data.slice(0),...(cylinderDiameterMeters!==undefined?{cylinderDiameterMeters}:{})});
     if(sources.size>8)throw new Error('Maximo 8 marcadores por motor.');
     signal.throwIfAborted();const next=this.createTracker();
-    try{await next.loadTargets([...sources].map(([id,buffer])=>({id,buffer:buffer.slice(0)})),signal);signal.throwIfAborted();}
+    try{await next.loadTargets(this.trackingSources(sources),signal);signal.throwIfAborted();}
     catch(error){next.dispose();throw error;}
     if(!additive){for(const key of this.presentations.keys())this.endPresentation(key,'removed');this.presentations.clear();this.observations.clear();}
     else if(this.presentations.has(id)){this.endPresentation(id,'removed');this.observations.delete(id);}
@@ -258,16 +267,16 @@ export class WebAREngine {
       ...(this.options.imageLossGraceMs!==undefined?{graceMs:this.options.imageLossGraceMs}:{}),
       ...(this.options.imageSmoothingMs!==undefined?{smoothingMs:this.options.imageSmoothingMs}:{})}));
     this.targetSources.clear();sources.forEach((buffer,key)=>this.targetSources.set(key,buffer));
-    this.tracker?.dispose();this.tracker=next;this.activeTargetId=id;this.targetData=this.targetSources.get(id)!;this.imageReference=null;
+    this.tracker?.dispose();this.tracker=next;this.activeTargetId=id;this.targetData=this.targetSources.get(id)!.buffer;this.imageReference=null;
     this.mode='image';this.currentState=EngineState.TrackingImage;this.status('target-loaded');
   }
   async removeTarget(id:string):Promise<void>{return this.operation(async signal=>{
     if(this.mode==='flow'||this.mode==='xr')throw new Error('Detener superficies antes de quitar marcadores.');
     if(!this.targetSources.has(id))return;
     const remaining=[...this.targetSources].filter(([key])=>key!==id);let next:Tracker|null=null;
-    if(remaining.length){next=this.createTracker();try{await next.loadTargets(remaining.map(([key,buffer])=>({id:key,buffer:buffer.slice(0)})),signal);signal.throwIfAborted();}catch(error){next.dispose();throw error;}}
+    if(remaining.length){next=this.createTracker();try{await next.loadTargets(this.trackingSources(remaining),signal);signal.throwIfAborted();}catch(error){next.dispose();throw error;}}
     this.endPresentation(id,'removed');this.presentations.delete(id);this.targetSources.delete(id);this.observations.delete(id);
-    this.tracker?.dispose();this.tracker=next;this.activeTargetId=remaining[0]?.[0]??'default';this.targetData=remaining[0]?.[1]??null;this.imageReference=null;
+    this.tracker?.dispose();this.tracker=next;this.activeTargetId=remaining[0]?.[0]??'default';this.targetData=remaining[0]?.[1].buffer??null;this.imageReference=null;
     if(!remaining.length){this.mode='camera';this.currentState=this.camera.state==='running'?EngineState.Camera:EngineState.Idle;}
   });}
 
@@ -276,7 +285,7 @@ export class WebAREngine {
     return this.operation(async signal=>{
       if(this.mode==='xr'||this.mode==='flow')throw new Error('Superficies ya habilitadas.');
       if(options.targetId&&!this.targetSources.has(options.targetId))throw new Error('Marcador desconocido.');
-      this.activeTargetId=options.targetId??this.activeTargetId;this.targetData=this.targetSources.get(this.activeTargetId)??this.targetData;this.imageReference=this.observations.get(this.activeTargetId)??null;
+      this.activeTargetId=options.targetId??this.activeTargetId;this.targetData=this.targetSources.get(this.activeTargetId)?.buffer??this.targetData;this.imageReference=this.observations.get(this.activeTargetId)??null;
       const previousMode=this.mode,hadCamera=this.currentState!==EngineState.Idle;
       const placement=options.placement??'auto',backend=options.backend??'auto';
       if(!['auto','preserve','hit-test'].includes(placement)||!['auto','webxr','optical-flow'].includes(backend))throw new Error('Backend o colocación desconocidos.');
@@ -442,8 +451,11 @@ export class WebAREngine {
           const id=result.targetId??'default',presentation=this.presentations.get(id);if(!presentation)continue;
           const output=presentation.update(result,batch.processingMs);qualities.push(output.quality);
           if(result.status==='tracked'){
-            this.observations.set(id,result.reference);anyTracked=true;
-            if(id===this.activeTargetId){this.imageReference=result.reference;this.referenceWaiter?.resolve();}
+            anyTracked=true;
+            if(this.targetSources.get(id)?.cylinderDiameterMeters===undefined){
+              this.observations.set(id,result.reference);
+              if(id===this.activeTargetId){this.imageReference=result.reference;this.referenceWaiter?.resolve();}
+            }
           }else{this.observations.delete(id);if(id===this.activeTargetId)this.imageReference=null;}
           anyRecovering ||= output.quality.state==='recovering';
           if(output.found)this.emitEvent('targetFound',output.found);
@@ -517,7 +529,7 @@ export class WebAREngine {
   private async restoreCamera(mode:'camera'|'image',signal:AbortSignal):Promise<void>{
     if(mode==='image'&&this.targetData){
       const tracker=this.createTracker();
-      try{await tracker.loadTargets([...this.targetSources].map(([id,buffer])=>({id,buffer:buffer.slice(0)})),signal);signal.throwIfAborted();}catch(error){tracker.dispose();throw error;}
+      try{await tracker.loadTargets(this.trackingSources(this.targetSources),signal);signal.throwIfAborted();}catch(error){tracker.dispose();throw error;}
       this.tracker?.dispose();this.tracker=tracker;this.imageReference=null;this.mode='image';this.currentState=EngineState.TrackingImage;
     }else{this.mode='camera';this.currentState=EngineState.Camera;}
     this.presentations.forEach(target=>target.resetSmoothing());await this.camera.start();signal.throwIfAborted();this.status('camera-ready');

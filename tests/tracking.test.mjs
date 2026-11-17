@@ -58,6 +58,44 @@ test('continuidad: tolera pérdida breve sin inventar poses y confirma pérdida 
   const strict=new TrackingContinuity(0);strict.update(true,1);assert.equal(strict.update(false,2),'lost');
 });
 
+test('etiqueta cilíndrica: recupera el eje desde varios ángulos y descarta fondo vacío',{timeout:30_000},async()=>{
+  const tracker=new Tracker({opencvURL:new URL('../public/vision/opencv.js',import.meta.url),calibration:k});
+  const bytes=await readFile('public/target.dat');
+  const buffer=bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.length);
+  const marker=decodeMarker(buffer),diameter=.17,radius=diameter/2,distance=.45;
+  const width=marker.physicalWidthMeters,height=width*marker.height/marker.width;
+  function frame(yaw){
+    const rgba=new Uint8ClampedArray(k.width*k.height*4);
+    for(let y=0;y<k.height;y++)for(let x=0;x<k.width;x++){
+      const dx=(x-k.cx)/k.fx,dy=(k.cy-y)/k.fy,a=dx*dx+1;
+      const delta=distance*distance-a*(distance*distance-radius*radius);
+      const index=(y*k.width+x)*4;
+      rgba[index]=rgba[index+1]=rgba[index+2]=35;rgba[index+3]=255;
+      if(delta<0)continue;
+      const depth=(distance-Math.sqrt(delta))/a;
+      const angle=Math.atan2(dx*depth,distance-depth)-yaw;
+      const u=angle*radius/width+.5,v=.5-dy*depth/height;
+      if(u<0||u>=1||v<0||v>=1)continue;
+      const sample=(Math.floor(v*600)*800+Math.floor(u*800))*4;
+      rgba.set(data.subarray(sample,sample+3),index);
+    }
+    return rgba;
+  }
+  const detect=(data,sessionId)=>tracker.processFrame({imageData:{data,width:k.width,height:k.height},
+    sessionId,timestampMs:sessionId*33,mediaTimeSeconds:0,sourceWidth:k.width,sourceHeight:k.height});
+  try{
+    await assert.rejects(tracker.loadTarget(buffer.slice(0),undefined,'can',.01),/circunferencia/);
+    await tracker.loadTarget(buffer,undefined,'can',diameter);
+    for(const [index,yaw] of [0,.27,-.31].entries()){
+      const result=await detect(frame(yaw),index+1);
+      assert.equal(result.status,'tracked',`yaw ${yaw}`);
+      assert.ok(Math.hypot(result.matrix[12],result.matrix[13],result.matrix[14]+distance)<.025);
+      assert.ok(Math.abs(Math.atan2(result.matrix[8],result.matrix[10])-yaw)<.12);
+    }
+    assert.equal((await detect(new Uint8ClampedArray(k.width*k.height*4).fill(255),4)).status,'not-found');
+  }finally{tracker.dispose();}
+});
+
 test('NFT sostenido: cambios de escala, luz, oclusión parcial y redetección',{timeout:45_000},async()=>{
   const tracker=new Tracker({opencvURL:new URL('../public/vision/opencv.js',import.meta.url),calibration:k});
   try{

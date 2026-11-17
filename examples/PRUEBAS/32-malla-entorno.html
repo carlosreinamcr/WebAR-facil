@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>32. Malla del entorno y oclusión</title>
+  <style>
+    body{margin:0;background:#edf3f8;color:#142b40;font:16px/1.5 system-ui}
+    main{max-width:900px;margin:auto;padding:12px}
+    .controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+    button,label{font:inherit;padding:8px;min-height:44px;box-sizing:border-box}
+    label{display:flex;align-items:center;gap:6px}
+    #view{position:relative;display:grid;place-items:center;height:65vh;height:65dvh;min-height:300px;overflow:hidden;background:#102231;touch-action:none}
+    #view canvas{cursor:crosshair}
+    #coverage{display:block;width:min(100%,360px);height:auto;background:#102231;border-radius:8px}
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+<main>
+  <a href="./index.html">← Galería</a>
+  <h1>32. Malla del entorno y oclusión</h1>
+  <p class="example-documentation" data-doc-en="placement.html#environment-mesh-example-32"><a href="../../docs/placement.html#malla-del-entorno-ejemplo-32">Cómo desarrollar este ejemplo</a></p>
+  <h2>Qué estás viendo</h2>
+  <p>Esta prueba experimental usa la cámara normal del teléfono para seguir detalles visibles, como esquinas y texturas. Estima su posición en 3D desde varias vistas y une puntos cercanos en triángulos. La malla muestra esa estimación. Puede quedar desplazada, cubrir solo parte del escritorio o dejar huecos en superficies lisas.</p>
+  <h2>Cómo probarlo</h2>
+  <ol>
+    <li>Empieza con una mesa bien iluminada que tenga detalles visibles. Mueve el teléfono de lado manteniendo parte de la misma zona en pantalla.</li>
+    <li>Toca un triángulo para colocar a Kai. Cambia de ángulo y alterna «Oclusión» para comprobar si la malla tapa al personaje donde lo haría la superficie real.</li>
+    <li>Apunta a otra zona y vuelve. Compara un borde de la malla con el mismo borde de la mesa. Si el borde aparece corrido aunque el seguimiento siga activo, anotaste un caso de deriva.</li>
+  </ol>
+  <div class="controls">
+    <button id="start" type="button" disabled>Iniciar cámara</button>
+    <button id="scan" type="button" disabled>Pausar escaneo</button>
+    <button id="stop" type="button" disabled>Detener</button>
+    <label><input id="show-mesh" type="checkbox" checked> Mostrar malla</label>
+    <label><input id="occlude" type="checkbox" checked> Oclusión</label>
+  </div>
+  <p id="status" role="status">Cargando WebAR Fácil…</p>
+  <p id="alignment">Alineación · esperando la cámara</p>
+  <p id="stats" role="status">0 zonas · 0 triángulos</p>
+  <div id="view"></div>
+  <h2>Cobertura del escaneo</h2>
+  <canvas id="coverage" width="360" height="220" aria-label="Vista superior de las zonas con geometría" role="img"></canvas>
+  <p>Los cuadros indican zonas con geometría, aunque tengan huecos. El punto amarillo marca la cámara. Pasa por los huecos desde otro ángulo.</p>
+  <p>La cobertura y el número de triángulos indican geometría guardada durante la sesión. La precisión puede variar entre zonas y la escala es relativa. Si el mapa se reinicia, tendrás que volver a escanear.</p>
+</main>
+<script>
+// Triangula vecinos que se observaron juntos en un mismo fotograma clave.
+// Descarta saltos de profundidad y aristas largas antes de construir la malla.
+function triangulateMap({keyframes,intrinsics:k}) {
+  const positions=[],colors=[];
+  const columns=18,rows=Math.max(8,Math.round(columns*k.height/k.width));
+  const seen=new Set();
+  for (const {points,view} of keyframes) {
+    const grid=new Array(columns*rows);
+    const [a,b,c,,d,e,f,,g,h,i,,tx,ty,tz]=view;
+    for (let index=0;index<points.length;index+=3) {
+      const x=points[index],y=points[index+1],z=points[index+2];
+      const depth=-(c*x+f*y+i*z+tz);
+      if (!(depth>.01)) continue;
+      const u=(k.fx*(a*x+d*y+g*z+tx)/depth+k.cx)/k.width*columns;
+      const v=(k.cy-k.fy*(b*x+e*y+h*z+ty)/depth)/k.height*rows;
+      const col=Math.floor(u),row=Math.floor(v);
+      if (col<0||col>=columns||row<0||row>=rows) continue;
+      const cell=row*columns+col;
+      const score=(u-col-.5)**2+(v-row-.5)**2;
+      if (!grid[cell]||score<grid[cell].score) grid[cell]={x,y,z,depth,score};
+    }
+    function triangle(p,q,r) {
+      if (!p||!q||!r) return;
+      const depth=Math.min(p.depth,q.depth,r.depth);
+      if (Math.max(p.depth,q.depth,r.depth)>depth*1.24) return;
+      const ab=[q.x-p.x,q.y-p.y,q.z-p.z],ac=[r.x-p.x,r.y-p.y,r.z-p.z];
+      if (Math.max(Math.hypot(...ab),Math.hypot(...ac),Math.hypot(r.x-q.x,r.y-q.y,r.z-q.z))>depth*.23) return;
+      const nx=ab[1]*ac[2]-ab[2]*ac[1],ny=ab[2]*ac[0]-ab[0]*ac[2],nz=ab[0]*ac[1]-ab[1]*ac[0];
+      const area=Math.hypot(nx,ny,nz);
+      if (area<depth*depth*.00004) return;
+      const vertices=[p,q,r];
+      const key=vertices.map(v=>[v.x,v.y,v.z].map(value=>Math.round(value*200)).join(',')).sort().join('/');
+      if (seen.has(key)) return;
+      seen.add(key);
+      const horizontal=Math.abs(ny/area);
+      for (const v of vertices) {
+        positions.push(v.x,v.y,v.z);
+        colors.push(.13+.47*(1-horizontal),.52+.39*horizontal,.98-.47*horizontal);
+      }
+    }
+    for (let row=0;row<rows-1;row++) {
+      for (let col=0;col<columns-1;col++) {
+        const index=row*columns+col;
+        const p=grid[index],q=grid[index+1],r=grid[index+columns],s=grid[index+columns+1];
+        if (q&&r) {
+          triangle(p,q,r);
+          triangle(q,s,r);
+        } else {
+          triangle(p,q,s);
+          triangle(p,s,r);
+        }
+      }
+    }
+  }
+  return {positions,colors};
+}
+
+// Cada bloque conserva su geometría aunque sus fotogramas salgan del mapa óptico.
+// Las coordenadas orientadas por el suelo mantienen una cuadrícula estable.
+function integrateMesh(blocks,{positions,colors},toMap,blockSize) {
+  const dirty=new Set();
+  let full=false;
+  for (let i=0;i<positions.length;i+=9) {
+    const center=[0,1,2].map(axis=>(positions[i+axis]+positions[i+axis+3]+positions[i+axis+6])/3);
+    const cell=toMap(center);
+    const index=cell.map(value=>Math.floor(value/blockSize));
+    const id=index.join(',');
+    let block=blocks.get(id);
+    if (!block) {
+      if (blocks.size>=96) {full=true;continue;}
+      block={index,keys:new Set(),positions:[],colors:[]};
+      blocks.set(id,block);
+    }
+    const vertices=[0,3,6].map(offset=>positions.slice(i+offset,i+offset+3)
+      .map(value=>Math.round(value/(blockSize*.025))).join(','));
+    const key=vertices.sort().join('/');
+    if (block.keys.has(key)) continue;
+    if (block.keys.size>=256) {full=true;continue;}
+    block.keys.add(key);
+    block.positions.push(...positions.slice(i,i+9));
+    block.colors.push(...colors.slice(i,i+9));
+    dirty.add(block);
+  }
+  return {dirty,full};
+}
+
+addEventListener('DOMContentLoaded',()=>{
+  const byId=id=>document.getElementById(id);
+  const start=byId('start'),stop=byId('stop'),scan=byId('scan'),status=byId('status'),stats=byId('stats');
+  const show=byId('show-mesh'),occlude=byId('occlude');
+  const alignment=byId('alignment');
+  const coverage=byId('coverage');
+  const context=coverage.getContext('2d');
+  if (!globalThis.WebARFacil) {
+    status.textContent='No se cargó WebAR Fácil.';
+    return;
+  }
+  const {THREE,ThreeARScene,ThreeARModel}=WebARFacil;
+  const meshIntervalMs=500;
+  let current,closing=Promise.resolve(),leaving=false;
+  start.disabled=false;
+  status.textContent='Pulsa «Iniciar cámara».';
+
+  function updateVisibility(session) {
+    session.depthGroup.visible=session.tracked&&occlude.checked;
+    session.overlayGroup.visible=session.tracked&&show.checked;
+    session.model.visible=session.tracked&&session.placed;
+  }
+
+  function updateBlock(session,block) {
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute('position',new THREE.Float32BufferAttribute(block.positions,3));
+    geometry.setAttribute('color',new THREE.Float32BufferAttribute(block.colors,3));
+    if (!block.depthMesh) {
+      block.depthMesh=new THREE.Mesh(geometry,session.depth);
+      block.depthMesh.renderOrder=-1;
+      block.overlay=new THREE.Mesh(geometry,session.fill);
+      block.edges=new THREE.LineSegments(new THREE.WireframeGeometry(geometry),session.line);
+      session.depthGroup.add(block.depthMesh);
+      session.overlayGroup.add(block.overlay,block.edges);
+      return;
+    }
+    block.depthMesh.geometry.dispose();
+    block.edges.geometry.dispose();
+    block.depthMesh.geometry=block.overlay.geometry=geometry;
+    block.edges.geometry=new THREE.WireframeGeometry(geometry);
+  }
+
+  function drawCoverage(session) {
+    if (!context) return;
+    const {width,height}=coverage;
+    context.clearRect(0,0,width,height);
+    if (!session?.blocks.size) return;
+    const tiles=new Map();
+    for (const {index:[x,,z],keys} of session.blocks.values()) {
+      const id=x+','+z,previous=tiles.get(id);
+      tiles.set(id,{x,z,count:keys.size+(previous?.count??0)});
+    }
+    const cells=[...tiles.values()];
+    const camera=session.app.camera.position;
+    const [x,,z]=camera.clone().setFromMatrixPosition(session.app.camera.matrixWorld)
+      .applyMatrix4(session.mapFromWorld).multiplyScalar(1/session.blockSize).toArray();
+    const minX=Math.min(...cells.map(cell=>cell.x),Math.floor(x));
+    const minZ=Math.min(...cells.map(cell=>cell.z),Math.floor(z));
+    const spanX=Math.max(...cells.map(cell=>cell.x),Math.floor(x))-minX+1;
+    const spanZ=Math.max(...cells.map(cell=>cell.z),Math.floor(z))-minZ+1;
+    const size=Math.min((width-24)/spanX,(height-24)/spanZ,58);
+    const left=(width-spanX*size)/2,top=(height-spanZ*size)/2;
+    for (const cell of cells) {
+      context.fillStyle='rgba(97,237,223,'+(Math.min(.95,.25+cell.count/300))+')';
+      context.fillRect(left+(cell.x-minX)*size,top+(cell.z-minZ)*size,Math.max(1,size-1),Math.max(1,size-1));
+    }
+    if (session.tracked) {
+      context.fillStyle='#ffcb57';
+      context.beginPath();
+      context.arc(left+(x-minX)*size,top+(z-minZ)*size,4,0,Math.PI*2);
+      context.fill();
+    }
+  }
+
+  function clearMesh(session) {
+    for (const block of session.blocks.values()) {
+      block.depthMesh?.geometry.dispose();
+      block.edges?.geometry.dispose();
+    }
+    session.depthGroup.clear();
+    session.overlayGroup.clear();
+    session.blocks.clear();
+    session.frames.clear();
+    session.mapFromWorld=null;
+    session.limited=false;
+    stats.textContent='0 zonas · 0 triángulos';
+    drawCoverage(null);
+  }
+
+  // Consulta el mapa cada 500 ms como máximo. Solo triangula vistas nuevas.
+  async function refreshMesh(session) {
+    session.pending=true;
+    const revision=session.revision;
+    try {
+      const {map}=await session.app.engine.exportSLAMMap();
+      if (current!==session||!session.tracked||session.paused||session.revision!==revision) return;
+      if (session.mapId!==map.mapId) {
+        clearMesh(session);
+        session.mapId=map.mapId;
+      }
+      if (!session.mapFromWorld) {
+        const anchor=new THREE.Matrix4().fromArray(session.pose.worldMatrix);
+        session.blockSize=Math.max(.05,new THREE.Vector3().setFromMatrixPosition(anchor)
+          .distanceTo(new THREE.Vector3().setFromMatrixPosition(session.app.camera.matrixWorld))*.65);
+        session.mapFromWorld=anchor.invert();
+      }
+      const nextFrames=new Set();
+      const unseen=map.keyframes.filter(frame=>{
+        const key=frame.view.join(',')+'/'+frame.points.join(',');
+        nextFrames.add(key);
+        return !session.frames.has(key);
+      });
+      session.frames=nextFrames;
+      if (!unseen.length) return;
+      const vector=new THREE.Vector3();
+      const {dirty,full}=integrateMesh(session.blocks,triangulateMap({...map,keyframes:unseen}),
+        center=>vector.fromArray(center).applyMatrix4(session.mapFromWorld).toArray(),session.blockSize);
+      for (const block of dirty) updateBlock(session,block);
+      if (dirty.size) drawCoverage(session);
+      session.limited ||= full;
+      const count=[...session.blocks.values()].reduce((sum,block)=>sum+block.keys.size,0);
+      stats.textContent=session.blocks.size+' zonas · '+count+' triángulos'
+        +(session.blocks.size===96?' · límite de zonas alcanzado':session.limited?' · alguna zona alcanzó su límite':'');
+      if (!session.placed) status.textContent=count
+        ?'Toca un triángulo para colocar a Kai o continúa escaneando.'
+        :'Continúa moviéndote de lado sobre una zona con textura.';
+    } catch (error) {
+      if (current===session&&session.tracked&&!session.placed&&!session.blocks.size) {
+        status.textContent='El mapa aún no está listo. Sigue escaneando.';
+      }
+    } finally {
+      session.pending=false;
+    }
+  }
+
+  async function closeSession() {
+    const session=current;
+    if (!session) return closing;
+    current=null;
+    start.disabled=true;
+    stop.disabled=true;
+    scan.disabled=true;
+    closing=session.app.dispose().finally(()=>{
+      session.model.dispose();
+      clearMesh(session);
+      session.depth.dispose();
+      session.line.dispose();
+      session.fill.dispose();
+      scan.textContent='Pausar escaneo';
+      alignment.textContent='Alineación · esperando la cámara';
+      start.disabled=leaving;
+    });
+    return closing;
+  }
+
+  start.onclick=async()=>{
+    start.disabled=true;
+    status.textContent='Abriendo cámara…';
+    let session;
+    try {
+      const app=new ThreeARScene({container:byId('view'),maxPixelRatio:1.5,antialias:false,
+        engineOptions:{keyframeCorrection:true,fallback:{floorROI:{x:0,y:0,width:1,height:1}}}});
+      const depth=new THREE.MeshBasicMaterial({colorWrite:false,side:THREE.DoubleSide});
+      const fill=new THREE.MeshBasicMaterial({
+        side:THREE.DoubleSide,vertexColors:true,transparent:true,opacity:.23,depthWrite:false,
+        polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1,
+      });
+      const line=new THREE.LineBasicMaterial({color:0x61eddf,transparent:true,opacity:.85,depthWrite:false});
+      const depthGroup=new THREE.Group(),overlayGroup=new THREE.Group();
+      const model=new ThreeARModel();
+      depthGroup.visible=overlayGroup.visible=model.visible=false;
+      app.scene.add(depthGroup,overlayGroup,model);
+      session=current={app,depthGroup,overlayGroup,depth,fill,line,model,tracked:false,placed:false,pending:false,
+        paused:false,next:0,nextCoverage:0,revision:0,blocks:new Map(),frames:new Set()};
+      app.onRender(delta=>model.update(delta));
+      app.engine.onStatus(state=>{
+        if (current!==session) return;
+        if (state==='odometry-map-reset') {
+          session.revision++;
+          session.placed=false;
+          session.tracked=false;
+          clearMesh(session);
+        }
+        if (['odometry-lost','odometry-map-reset','camera-suspended'].includes(state)) {
+          session.tracked=false;
+          updateVisibility(session);
+          drawCoverage(session);
+          const reset=state==='odometry-map-reset';
+          alignment.textContent=reset?'Alineación · mapa reiniciado':'Alineación · seguimiento interrumpido';
+          status.textContent=reset?'Se inició un mapa nuevo. Vuelve a escanear la superficie.'
+            :'Vuelve a mirar una zona escaneada.';
+        }
+      });
+      app.engine.onError(error=>{if (current===session) status.textContent=error.message;});
+      app.engine.onPose((_matrix,pose)=>{
+        if (current!==session||pose.backend!=='optical-flow') return;
+        const recovered=!session.tracked;
+        session.tracked=true;
+        session.pose=pose;
+        updateVisibility(session);
+        if (pose.diagnostics?.relocalized) alignment.textContent='Alineación · cámara relocalizada en el mapa';
+        else if (pose.diagnostics?.keyframeCorrected) alignment.textContent='Alineación · cámara ajustada con una vista anterior';
+        else if (recovered) alignment.textContent='Alineación · seguimiento óptico activo; comprueba los bordes';
+        if (recovered) status.textContent=session.placed?'Kai está colocado. Puedes seguir escaneando.'
+          :'Continúa escaneando o toca una zona de la malla.';
+        const now=performance.now();
+        if (now>=session.nextCoverage) {
+          session.nextCoverage=now+250;
+          drawCoverage(session);
+        }
+        if (!session.paused&&!session.pending&&now>=session.next) {
+          session.next=now+meshIntervalMs;
+          void refreshMesh(session);
+        }
+      });
+      app.renderer.domElement.addEventListener('click',event=>{
+        if (current!==session||!session.tracked||!session.blocks.size||!model.model) return;
+        const rect=app.renderer.domElement.getBoundingClientRect();
+        const point=new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2);
+        const ray=new THREE.Raycaster();
+        ray.setFromCamera(point,app.camera);
+        const hit=ray.intersectObjects(depthGroup.children,false)[0];
+        if (!hit) return;
+        const up=new THREE.Vector3().fromArray(session.pose.worldMatrix,4).normalize();
+        model.position.copy(hit.point).addScaledVector(up,hit.distance*.008);
+        model.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),up);
+        model.scale.setScalar(hit.distance*.24);
+        session.placed=true;
+        updateVisibility(session);
+        status.textContent='Kai está colocado. Cambia de ángulo para probar la oclusión.';
+      });
+      await app.engine.startCamera();
+      if (current!==session) return;
+      stop.disabled=false;
+      scan.disabled=false;
+      status.textContent='Mueve el teléfono de lado para inicializar el mapa.';
+      await app.engine.enableSLAM({backend:'optical-flow',placement:'hit-test'});
+      await model.load('../assets/Kai-WebAR-Facil.glb',{fitSize:1,autoplay:false});
+      if (current===session&&model.animations.includes('Waving')) model.playAnimation('Waving');
+    } catch (error) {
+      if (session&&current!==session) return;
+      await closeSession();
+      start.disabled=leaving;
+      status.textContent=error.message;
+    }
+  };
+  scan.onclick=()=>{
+    if (!current) return;
+    current.paused=!current.paused;
+    current.revision++;
+    scan.textContent=current.paused?'Reanudar escaneo':'Pausar escaneo';
+    if (!current.paused) current.next=0;
+    status.textContent=current.paused?'Escaneo en pausa.':'Escaneo en curso.';
+  };
+  stop.onclick=async()=>{
+    await closeSession();
+    status.textContent='Cámara detenida.';
+  };
+  show.onchange=occlude.onchange=()=>{if (current) updateVisibility(current);};
+  addEventListener('pagehide',()=>{leaving=true;void closeSession();});
+});
+</script>
+</body>
+</html>

@@ -56,7 +56,7 @@ El recorrido recomendado utiliza **HTML declarativo**. Un script y etiquetas par
 
 Con el servidor iniciado, abre:
 
-- [Galería de 31 ejemplos](../examples/PRUEBAS/index.html). GLB, gestos, vídeo, mapas locales, colocación y escala métrica experimental.
+- [Galería de 35 ejemplos](../examples/PRUEBAS/index.html). GLB, gestos, vídeo, mapas locales, colocación y escala métrica experimental.
 
 - [HTML declarativo](../examples/declarative.html): imagen y GLB sin JavaScript propio.
 - [SLAM declarativo](../examples/declarative-slam.html): odometría sin marcador.

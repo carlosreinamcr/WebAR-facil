@@ -12,6 +12,7 @@ import {SurfacePlacement,type PlacementState} from './SurfacePlacement';
 import {SceneMediaMenu} from './SceneMediaMenu';
 import {ARDiagnostics,type DiagnosticReport} from '../diagnostics/ARDiagnostics';
 import {cameraProfile} from '../camera/performance';
+import {registerHandInteraction} from './HandInteraction';
 import {hasEmbeddedAssets} from '../internal/EmbeddedAssets';
 import type {WebAREngine,SurfaceTransitionOptions,SurfaceTransitionResult} from '../WebAREngine';
 
@@ -72,7 +73,7 @@ function observePromise(task:Promise<void>):Promise<void>{void task.catch(()=>{}
 export function registerARComponents(options:ARComponentsOptions={}):void {
   if(typeof window==='undefined'||!window.customElements)throw new Error('Web Components requiere un navegador.');
   const names=['webar-scene','webar-target','webar-model','webar-video'];
-  const existing=names.filter(name=>customElements.get(name));if(existing.length===names.length)return;
+  const existing=names.filter(name=>customElements.get(name));if(existing.length===names.length){registerHandInteraction();return;}
   if(existing.length)throw new Error('Registro parcial: no mezcles versiones del SDK WebAR.');
   const assetBase=new URL(options.assetBase?.toString()??'./',document.baseURI);if(!assetBase.pathname.endsWith('/'))assetBase.pathname+='/';
 
@@ -414,7 +415,9 @@ export function registerARComponents(options:ARComponentsOptions={}):void {
         const performanceMode=selected??this.getAttribute('performance')??'auto',preset=cameraProfile(performanceMode);
         const deviceId=this.getAttribute('camera-device-id')??this.qualityDeviceId;
         const read=(name:string,value:number)=>selected?value:numberAttribute(this,name,value);
-        const camera={...(deviceId?{deviceId}:{}),performance:performanceMode as 'auto'|'balanced'|'battery'|'quality',
+        const facingMode=this.getAttribute('facing-mode')??'environment';
+        if(facingMode!=='environment'&&facingMode!=='user')throw new Error('facing-mode debe ser environment o user.');
+        const camera={...(deviceId?{deviceId}:{}),facingMode:facingMode as 'environment'|'user',performance:performanceMode as 'auto'|'balanced'|'battery'|'quality',
           maxFrameWidth:read('analysis-width',preset.maxFrameWidth),maxFramePixels:read('analysis-pixels',preset.maxFramePixels),
           fps:read('fps',preset.fps),width:read('camera-width',preset.width),height:read('camera-height',preset.height)};
         const opencvPath=this.getAttribute('opencv-url');
@@ -518,4 +521,5 @@ export function registerARComponents(options:ARComponentsOptions={}):void {
     }
   }
   customElements.define('webar-model',ModelElement);customElements.define('webar-video',VideoElement);customElements.define('webar-target',TargetElement);customElements.define('webar-scene',SceneElement);
+  registerHandInteraction();
 }

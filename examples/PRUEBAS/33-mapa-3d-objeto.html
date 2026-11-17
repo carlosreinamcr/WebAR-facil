@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta name="author" content="IngCarlosReina. - Realidad Aumentada Empezando Desde Cero">
+<!-- Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+Web: https://realidad-aumentada.com.co
+Blog: https://blog.realidad-aumentada.com.co
+YouTube: https://www.youtube.com/@carlosreinamcr -->
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>33. Captura un mapa 3D de un objeto</title>
+  <style>
+    body{margin:0;background:#edf3f8;color:#142b40;font:16px/1.5 system-ui}
+    main{max-width:850px;margin:auto;padding:12px}
+    .controls{display:flex;flex-wrap:wrap;gap:8px}
+    button{font:inherit;min-height:44px;padding:8px 12px}
+    #view{position:relative;display:grid;place-items:center;height:52vh;height:52dvh;min-height:280px;overflow:hidden;background:#102231;border-radius:12px}
+    #guide{position:absolute;z-index:1;width:48%;height:48%;border:2px dashed #61efdc;border-radius:12px;
+      box-sizing:border-box;pointer-events:none;box-shadow:0 0 0 1px #092132}
+    #preview{display:block;width:100%;height:300px;margin:8px 0;border-radius:12px;background:#102231;touch-action:none;cursor:grab}
+    #preview:active{cursor:grabbing}
+    #stats{font-variant-numeric:tabular-nums}
+  </style>
+  <script defer src="../dist/webar-facil.min.js"></script>
+</head>
+<body>
+<main>
+  <a href="./index.html">← Galería</a>
+  <h1>33. Captura un mapa 3D de un objeto</h1>
+  <p class="example-documentation" data-doc-en="placement.html#object-point-cloud-example-33"><a href="../../docs/placement.html#mapa-3d-de-un-objeto-ejemplo-33">Cómo desarrollar este ejemplo</a></p>
+  <p>Deja quieto un objeto mate con detalles visibles. Llena la guía con el objeto y apunta su centro a una zona con textura. Desplázate un poco de lado y pulsa <strong>Capturar vista</strong>. Repite con pasos cortos para conservar detalles en común entre tomas.</p>
+  <div class="controls">
+    <button id="start" disabled>Iniciar cámara</button>
+    <button id="capture" disabled>Capturar vista</button>
+    <button id="stop" disabled>Detener cámara</button>
+    <button id="reset" disabled>Borrar mapa</button>
+  </div>
+  <p id="status" role="status">Cargando WebAR Fácil…</p>
+  <div id="view"><div id="guide" aria-hidden="true" hidden></div></div>
+  <h2>Mapa 3D de la captura</h2>
+  <p id="stats" role="status">0 de 24 vistas · 0 puntos</p>
+  <canvas id="preview" role="img" aria-label="Vista 3D de los puntos capturados"></canvas>
+  <div class="controls" aria-label="Controles del mapa">
+    <button id="left" aria-label="Girar a la izquierda">Girar ⟲</button>
+    <button id="right" aria-label="Girar a la derecha">Girar ⟳</button>
+    <button id="in" aria-label="Acercar el mapa">＋</button>
+    <button id="out" aria-label="Alejar el mapa">−</button>
+    <button id="center">Restablecer vista</button>
+  </div>
+  <p>Arrastra para girar el mapa. Cada color identifica la primera vista que aportó esos puntos. Esta prueba genera una nube dispersa de escala relativa. Puede incluir puntos del fondo y deja huecos donde falta textura. Las vistas se capturan desde la cámara y permanecen en memoria mientras tengas abierta la página.</p>
+</main>
+<script>
+// Creador: IngCarlosReina. - Realidad Aumentada Empezando Desde Cero
+// Web: https://realidad-aumentada.com.co
+// Blog: https://blog.realidad-aumentada.com.co
+// YouTube: https://www.youtube.com/@carlosreinamcr
+
+// Recorta por proyección y por profundidad alrededor de la zona del centro.
+function selectPoints(frame,k) {
+  const {view,points}=frame;
+  const candidates=[],center=[];
+  for (let i=0;i<points.length;i+=3) {
+    const x=points[i],y=points[i+1],z=points[i+2];
+    const depth=-(view[2]*x+view[6]*y+view[10]*z+view[14]);
+    if (!(depth>.01)) continue;
+    const u=(k.fx*(view[0]*x+view[4]*y+view[8]*z+view[12])/depth+k.cx)/k.width-.5;
+    const v=(k.cy-k.fy*(view[1]*x+view[5]*y+view[9]*z+view[13])/depth)/k.height-.5;
+    if (Math.abs(u)>.24||Math.abs(v)>.24) continue;
+    const offset=Math.hypot(u,v);
+    candidates.push({x,y,z,depth,offset});
+    if (offset<.10) center.push(depth);
+  }
+  if (center.length<4) return {median:0,points:[]};
+  center.sort((a,b)=>a-b);
+  const median=center[Math.floor(center.length/2)];
+  const nearby=candidates.filter(point=>Math.abs(point.depth-median)<median*.23);
+  const seed=nearby.reduce((best,point)=>!best||point.offset<best.offset?point:best,null);
+  if (!seed) return {median,points:[]};
+  // Conserva el componente 3D unido al centro, evitando grupos de fondo aislados.
+  const cluster=[seed],visited=new Set(cluster),spacing=median*.075;
+  for (let i=0;i<cluster.length;i++) {
+    const point=cluster[i];
+    for (const neighbor of nearby) {
+      if (visited.has(neighbor)||Math.hypot(neighbor.x-point.x,neighbor.y-point.y,neighbor.z-point.z)>spacing) continue;
+      visited.add(neighbor);cluster.push(neighbor);
+    }
+  }
+  return {median,points:cluster};
+}
+
+addEventListener('DOMContentLoaded',()=>{
+  const id=name=>document.getElementById(name);
+  const start=id('start'),capture=id('capture'),stop=id('stop'),reset=id('reset');
+  const view=id('view'),guide=id('guide'),preview=id('preview'),status=id('status'),stats=id('stats');
+  const context=preview.getContext('2d');
+  if (!globalThis.WebARFacil||!context) {status.textContent='El navegador no pudo cargar el visor.';return;}
+  const {THREE,ThreeARScene}=WebARFacil;
+  const maxViews=24;
+  const points=new Map(),views=[];
+  const basis=new THREE.Matrix4();
+  let session,mapId,cell=.01,pending=false,closing=false,leaving=false;
+  let center=[0,0,0],radius=1,yaw=0,pitch=0,zoom=1,drag=null;
+  start.disabled=false;
+  status.textContent='Pulsa «Iniciar cámara».';
+
+  function controls() {
+    start.disabled=Boolean(session)||closing||leaving;
+    stop.disabled=!session||closing;
+    capture.disabled=!session?.ready||pending||views.length>=maxViews;
+    reset.disabled=pending||!views.length;
+    guide.hidden=!session;
+    stats.textContent=views.length+' de '+maxViews+' vistas · '+points.size+' puntos';
+  }
+  function fitCloud() {
+    const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+    for (const {xyz} of points.values()) for (let axis=0;axis<3;axis++) {
+      min[axis]=Math.min(min[axis],xyz[axis]);
+      max[axis]=Math.max(max[axis],xyz[axis]);
+    }
+    center=points.size?min.map((value,axis)=>(value+max[axis])/2):[0,0,0];
+    radius=points.size?Math.max(.001,Math.hypot(...max.map((value,axis)=>value-min[axis]))*.5):1;
+  }
+  function drawCloud() {
+    const ratio=Math.min(devicePixelRatio||1,2);
+    const width=Math.max(1,preview.clientWidth),height=Math.max(1,preview.clientHeight);
+    const pixelWidth=Math.round(width*ratio),pixelHeight=Math.round(height*ratio);
+    if (preview.width!==pixelWidth||preview.height!==pixelHeight) {
+      preview.width=pixelWidth;preview.height=pixelHeight;
+    }
+    context.setTransform(ratio,0,0,ratio,0,0);
+    context.clearRect(0,0,width,height);
+    if (!points.size) {
+      context.fillStyle='#b5cbd9';context.font='14px system-ui';context.textAlign='center';
+      context.fillText('Aquí aparecerán los puntos capturados',width/2,height/2);
+      return;
+    }
+    const scale=Math.min(width,height)*.43*zoom/radius;
+    const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+    const rendered=[];
+    for (const {xyz,color} of points.values()) {
+      const [x,y,z]=xyz.map((value,axis)=>value-center[axis]);
+      const horizontal=cy*x+sy*z,depth=cy*z-sy*x;
+      rendered.push({x:horizontal,y:cp*y-sp*depth,z:sp*y+cp*depth,color});
+    }
+    rendered.sort((a,b)=>a.z-b.z);
+    for (const point of rendered) {
+      context.fillStyle=point.color;
+      context.fillRect(width/2+point.x*scale-1.5,height/2-point.y*scale-1.5,3,3);
+    }
+  }
+  function clearMap() {
+    points.clear();views.length=0;mapId=undefined;
+    yaw=pitch=0;zoom=1;
+    fitCloud();drawCloud();controls();
+  }
+  function syncGuide(active) {
+    const canvas=active.app.renderer.domElement.getBoundingClientRect();
+    guide.style.width=canvas.width*.48+'px';
+    guide.style.height=canvas.height*.48+'px';
+  }
+  const observer=new ResizeObserver(()=>{
+    drawCloud();
+    if (session) syncGuide(session);
+  });
+  observer.observe(preview);
+  observer.observe(view);
+  drawCloud();
+
+  async function closeSession() {
+    if (!session||closing) return;
+    const active=session;
+    session=null;closing=true;
+    controls();
+    try {await active.app.dispose();}
+    finally {closing=false;pending=false;controls();}
+  }
+  start.onclick=async()=>{
+    let active;
+    try {
+      const app=new ThreeARScene({container:view,maxPixelRatio:1.25,antialias:false,lighting:false});
+      active=session={app,ready:false,epoch:0};
+      clearMap();
+      syncGuide(active);
+      app.engine.videoElement.addEventListener('resize',()=>{if(session===active) syncGuide(active);});
+      status.textContent='Abriendo cámara…';
+      app.engine.onStatus(message=>{
+        if (session!==active) return;
+        if (message==='odometry-map-reset') {
+          active.epoch++;
+          clearMap();
+          status.textContent='El motor reinició el mapa. Vuelve a encuadrar el objeto.';
+        }
+        if (['odometry-map-reset','odometry-lost','camera-suspended','stopped'].includes(message)) {
+          active.ready=false;
+          if (message==='odometry-lost') status.textContent='Vuelve a una vista conocida del objeto.';
+          controls();
+        }
+        if (['scan-floor','surface-tracked','odometry-relocalized'].includes(message)&&!active.ready) {
+          active.ready=true;
+          status.textContent='Encuadra el objeto y pulsa «Capturar vista».';
+          controls();
+        }
+      });
+      app.engine.onError(error=>{if(session===active) status.textContent=error.message;});
+      await app.engine.startCamera();
+      if (session!==active) return;
+      status.textContent='Desplaza el teléfono de lado para inicializar el mapa.';
+      await app.engine.enableSLAM({backend:'optical-flow',placement:'hit-test'});
+    } catch (error) {
+      if (active&&session!==active) return;
+      await closeSession();
+      status.textContent=error.message;
+    }
+  };
+
+  capture.onclick=async()=>{
+    const active=session;
+    if (!active?.ready||pending||views.length>=maxViews) return;
+    pending=true;controls();
+    const epoch=active.epoch;
+    try {
+      const {map}=await active.app.engine.exportSLAMMap({includeCurrentView:true});
+      if (session!==active||active.epoch!==epoch||!active.ready) return;
+      const frame=map.keyframes.at(-1);
+      if (!map.currentViewCaptured||!frame) {
+        status.textContent='Todavía faltan referencias estables. Muévete de lado y vuelve a capturar.';
+        return;
+      }
+      const selection=selectPoints(frame,map.intrinsics);
+      if (selection.points.length<12) {
+        status.textContent='Hay pocos detalles dentro de la guía. Acércate o busca mejor iluminación.';
+        return;
+      }
+      if (mapId!==undefined&&mapId!==map.mapId) clearMap();
+      mapId=map.mapId;
+      const camera=basis.fromArray(frame.view).invert();
+      const position=new THREE.Vector3().setFromMatrixPosition(camera);
+      if (views.some(previous=>previous.distanceTo(position)<selection.median*.055)) {
+        status.textContent='Esta posición se parece a una vista guardada. Da un paso hacia un lado.';
+        return;
+      }
+      if (points.size) {
+        const overlapDistance=cell*2.5;
+        const saved=[...points.values()];
+        let shared=0;
+        for (const point of selection.points) {
+          if (saved.some(({xyz})=>Math.hypot(point.x-xyz[0],point.y-xyz[1],point.z-xyz[2])<=overlapDistance)) shared++;
+          if (shared>=6) break;
+        }
+        if (shared<6) {
+          status.textContent='Esta vista comparte pocos puntos con el mapa. Vuelve un poco hacia la toma anterior.';
+          return;
+        }
+      }
+      if (!views.length) cell=selection.median*.012;
+      const hue=Math.round((172+views.length*137.508)%360);
+      const lightness=views.length%2===0?72:63;
+      const color='hsl('+hue+' 85% '+lightness+'%)';
+      const previousSize=points.size;
+      views.push(position);
+      for (const {x,y,z} of selection.points) {
+        const xyz=[x,y,z];
+        const key=xyz.map(value=>Math.round(value/cell)).join(',');
+        if (!points.has(key)) points.set(key,{xyz,color});
+      }
+      fitCloud();drawCloud();
+      const added=points.size-previousSize;
+      const contribution=added===1?'1 punto nuevo.':added+' puntos nuevos.';
+      status.textContent=views.length===maxViews?'Guardaste '+maxViews+' vistas. Última toma: '+contribution
+        :'Vista guardada: '+contribution+(added===0?' Prueba desde otro ángulo.':' Cambia de posición para la siguiente toma.');
+    } catch {
+      if (session===active&&active.epoch===epoch) status.textContent='El mapa aún está inicializando. Mantén el objeto en pantalla y avanza de lado.';
+    } finally {
+      if (session===active) {pending=false;controls();}
+    }
+  };
+  stop.onclick=async()=>{
+    await closeSession();
+    status.textContent='Cámara detenida. Puedes seguir explorando el mapa de abajo.';
+  };
+  reset.onclick=()=>{clearMap();status.textContent=session?'Mapa vacío. Captura una nueva vista.':'Mapa borrado.';};
+
+  preview.addEventListener('pointerdown',event=>{
+    drag={id:event.pointerId,x:event.clientX,y:event.clientY};
+    preview.setPointerCapture(event.pointerId);
+  });
+  preview.addEventListener('pointermove',event=>{
+    if (drag?.id!==event.pointerId) return;
+    yaw+=(event.clientX-drag.x)*.012;
+    pitch=THREE.MathUtils.clamp(pitch+(event.clientY-drag.y)*.012,-1.45,1.45);
+    drag.x=event.clientX;drag.y=event.clientY;drawCloud();
+  });
+  preview.addEventListener('lostpointercapture',()=>{drag=null;});
+  id('left').onclick=()=>{yaw-=.35;drawCloud();};
+  id('right').onclick=()=>{yaw+=.35;drawCloud();};
+  id('in').onclick=()=>{zoom=Math.min(3,zoom*1.25);drawCloud();};
+  id('out').onclick=()=>{zoom=Math.max(.4,zoom/1.25);drawCloud();};
+  id('center').onclick=()=>{yaw=pitch=0;zoom=1;drawCloud();};
+  addEventListener('pagehide',event=>{
+    leaving=!event.persisted;
+    if (leaving) observer.disconnect();
+    void closeSession();
+  });
+});
+</script>
+</body>
+</html>

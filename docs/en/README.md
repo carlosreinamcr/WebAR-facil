@@ -23,7 +23,7 @@ WebAR Fácil is an MIT-licensed TypeScript library for building browser-based au
 
 ## Run an example
 
-The [gallery of 31 examples](../../examples/PRUEBAS/index.html) covers markers, gestures, 3D models, video, surfaces and local maps. Use the [image example](../../examples/declarative.html) for a first test, the [video example](../../examples/declarative-video.html) for chroma key, or the [placement example](../../examples/declarative-placement.html) for a surface.
+The [gallery of 35 examples](../../examples/PRUEBAS/index.html) covers markers, gestures, 3D models, video, surfaces and local maps. Use the [image example](../../examples/declarative.html) for a first test, the [video example](../../examples/declarative-video.html) for chroma key, or the [placement example](../../examples/declarative-placement.html) for a surface.
 
 Image tracking and optical odometry work with ordinary camera capture. Native immersive WebXR depends on the browser and device. Optical placement without a metric reference uses relative scale. [Tracking modes](spatial-tracking.md)
 

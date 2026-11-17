@@ -9,7 +9,8 @@ import {createTrackingProfile,measureTracking,type ImageTrackingProfile} from '.
 import { decodeMarker, type CompiledMarker } from './ImageCompiler.ts';
 import { loadOpenCV, CvScope, type CV } from '../vision/runtime.ts';
 import { createORB, extractORB, matchORBProfiled, trackLK, GrayBuffers, ORB_EXTRACTOR_ID } from '../vision/features.ts';
-import { solvePose } from '../vision/pose.ts';
+import { solvePose,type PoseSolution } from '../vision/pose.ts';
+import {cylinderPoints,cylinderSupport,validateCylinder} from './CylindricalTarget.ts';
 import { projectionFromIntrinsics } from '../vision/calibration.ts';
 import { PlanarCameraEstimator } from '../vision/PlanarCameraEstimator.ts';
 import type { TrackingResult, TrackingFrameRequest } from './types.ts';
@@ -56,7 +57,14 @@ class ImageTargetState {
   private lastSequence=-1;
   private lastGlobalFrame=-1;private lastGlobalTimestamp=0;
   private readonly cv:CV;private readonly marker:CompiledMarker;
-  constructor(cv:CV,marker:CompiledMarker){this.cv=cv;this.marker=marker;}
+  constructor(cv:CV,marker:CompiledMarker,private readonly diameter?:number){this.cv=cv;this.marker=marker;}
+  private curvedPose(objects:Float32Array,pixels:Float32Array,intrinsics:TrackingFrameRequest['intrinsics']):PoseSolution|null{
+    const pose=solvePose(this.cv,objects,pixels,intrinsics);
+    if(!pose||pose.errorPx>2.5||pose.inliers.length<pixels.length/2*.3)return null;
+    const height=this.marker.physicalWidthMeters*this.marker.height/this.marker.width;
+    const inliers=cylinderSupport(pose.matrix,objects,pixels,pose.inliers,this.diameter!,height);
+    return inliers.length>=12?{...pose,inliers}:null;
+  }
   private targetSize(matrix:Float32Array,k:TrackingFrameRequest['intrinsics']):number{
     const width=this.marker.physicalWidthMeters,height=width*this.marker.height/this.marker.width;
     const points=[[-width/2,0,-height/2],[width/2,0,-height/2],[width/2,0,height/2],[-width/2,0,height/2]];
@@ -92,13 +100,31 @@ process(frame:TrackingFrameRequest,gray:InstanceType<CV['Mat']>,featuresForFrame
     motionPixels=displacements[Math.floor(displacements.length/2)]??0;
     pixels = tracked.points;
     objects = new Float32Array(tracked.indices.flatMap(i => Array.from(this.previousObjects.subarray(3 * i, 3 * i + 3))));
-    ({pixels,objects}=measureTracking(profile,'flowValidationMs',()=>consistentFlow(this.cv,pixels,objects)));
+    if(this.diameter===undefined)({pixels,objects}=measureTracking(profile,'flowValidationMs',()=>consistentFlow(this.cv,pixels,objects)));
   }
   // LK ya filtra ida/vuelta. Resolver el plano con ITERATIVE usa todo su soporte;
   // EPNP/RANSAC puede conservar un subconjunto ambiguo y desalinear los bordes.
   // Si la reproyección no es consistente, se redetecta con ORB + homografía RANSAC.
-  let solution = pixels.length >= 24 ? measureTracking(profile,'poseMs',()=>solvePose(this.cv, objects, pixels, intrinsics, false)) : null;
+  let solution = pixels.length >= 24 ? measureTracking(profile,'poseMs',()=>this.diameter===undefined
+    ?solvePose(this.cv,objects,pixels,intrinsics,false):this.curvedPose(objects,pixels,intrinsics)) : null;
   if(solution)profile.counts.flowAccepted++;
+  if(this.diameter!==undefined){
+    const due=descriptorDeadline(this.frames,frame.timestampMs,this.lastGlobalFrame,this.lastGlobalTimestamp,350);
+    if((!solution||due)&&reserveGlobal()){
+      this.lastGlobalFrame=this.frames;this.lastGlobalTimestamp=frame.timestampMs;
+      profile.counts.fullDetections++;
+      const features=featuresForFrame();
+      const matches=measureTracking(profile,'matchingMs',()=>matchORBProfiled(this.cv,this.marker.descriptors,features.descriptors));
+      profile.counts[matches.backend==='wasm-exact'?'exactMatchingCalls':matches.backend==='opencv'?'opencvMatchingCalls':'emptyMatchingCalls']++;
+      const targetPoints=new Float32Array(matches.matches.flatMap(m=>[this.marker.keypoints[m.query*4]!,this.marker.keypoints[m.query*4+1]!]));
+      const nextPixels=new Float32Array(matches.matches.flatMap(m=>[features.keypoints[m.train*4]!,features.keypoints[m.train*4+1]!]));
+      const nextObjects=cylinderPoints(targetPoints,this.marker.width,this.marker.height,this.marker.physicalWidthMeters,this.diameter);
+      const next=nextPixels.length>=24?measureTracking(profile,'poseMs',()=>this.curvedPose(nextObjects,nextPixels,intrinsics)):null;
+      if(next&&(!solution||next.inliers.length>=solution.inliers.length*.7)){
+        solution=next;pixels=nextPixels;objects=nextObjects;
+      }
+    }
+  }else{
   const support=measureTracking(profile,'supportMs',()=>assessPlanarSupport(objects,pixels,solution?.inliers??[],this.marker.physicalWidthMeters,this.marker.physicalWidthMeters*this.marker.height/this.marker.width,solution?.errorPx??Infinity,this.previousPixels.length/2));
   if(support.reliable){profile.counts.flowReliable++;if(support.points<24)profile.counts.flowSparseReliable++;}
   const frameInterval=frame.timestampMs-this.lastTimestamp;
@@ -219,6 +245,7 @@ process(frame:TrackingFrameRequest,gray:InstanceType<CV['Mat']>,featuresForFrame
     }
     if(!solution&&flowSolution){solution=flowSolution;pixels=flowPixels;objects=flowObjects;intrinsics=flowIntrinsics;}
   }
+  }
   this.previous = gray; this.frames++;this.lastMotion=motionPixels;this.lastTimestamp=frame.timestampMs;
   if (!solution || solution.inliers.length < 12) {
     this.previousPixels = new Float32Array(); this.previousObjects = new Float32Array();
@@ -230,8 +257,9 @@ process(frame:TrackingFrameRequest,gray:InstanceType<CV['Mat']>,featuresForFrame
     if(count>=6)return false;cells.set(cell,count+1);return true;}).slice(0,384);
   this.previousPixels = new Float32Array(retained.flatMap(i => [pixels[i * 2]!, pixels[i * 2 + 1]!]));
   this.previousObjects = new Float32Array(retained.flatMap(i => Array.from(objects.subarray(i * 3, i * 3 + 3))));
+  const size=this.diameter===undefined?this.targetSize(solution.matrix,intrinsics):Math.max(...this.previousPixels.filter((_,i)=>i%2===1))-Math.min(...this.previousPixels.filter((_,i)=>i%2===1));
   return {
-    quality:{...statistics,motionPixels,targetSizePx:this.targetSize(solution.matrix,intrinsics),featureCount:pixels.length/2,inliers:solution.inliers.length,reprojectionErrorPx:solution.errorPx},
+    quality:{...statistics,motionPixels,targetSizePx:size,featureCount:pixels.length/2,inliers:solution.inliers.length,reprojectionErrorPx:solution.errorPx},
     status: 'tracked', timestampMs: frame.timestampMs, sessionId: frame.sessionId,
     processingMs: performance.now() - start, matrix: solution.matrix,
     projectionMatrix: projectionFromIntrinsics(intrinsics), projectionSource: frame.projectionSource,
@@ -254,7 +282,7 @@ const targets=new Map<string,ImageTargetState>();
 let sceneSignature='',cameraEstimator=new PlanarCameraEstimator();
 let frameSequence=0;
 scope.addEventListener('message',(event:MessageEvent<unknown>)=>{
-  const message=event.data as TrackingFrameRequest|{id:number;type:'LOAD_TARGET'|'ADD_TARGET';buffer:ArrayBuffer;opencvURL:string;targetId?:string};
+  const message=event.data as TrackingFrameRequest|{id:number;type:'LOAD_TARGET'|'ADD_TARGET';buffer:ArrayBuffer;opencvURL:string;targetId?:string;cylinderDiameterMeters?:number};
   if(!message||!Number.isSafeInteger(message.id))return;
   if(busy){scope.postMessage({id:message.id,ok:false,error:'Worker ocupado.'});return;}busy=true;
   void(async()=>{
@@ -263,11 +291,12 @@ scope.addEventListener('message',(event:MessageEvent<unknown>)=>{
       if(!/^[a-zA-Z0-9_-]{1,64}$/.test(targetId))throw new Error('ID de marcador invalido.');
       if(message.type==='ADD_TARGET'&&!targets.has(targetId)&&targets.size>=8)throw new Error('Maximo 8 marcadores por Worker.');
       const decoded=decodeMarker(message.buffer);
+      if(message.cylinderDiameterMeters!==undefined)validateCylinder(message.cylinderDiameterMeters,decoded.physicalWidthMeters);
       if(decoded.simulated||decoded.extractorId!==ORB_EXTRACTOR_ID)throw new Error('Extractor incompatible.');
       const runtime=await loadOpenCV(message.opencvURL);cv=runtime.cv;
       if(message.type==='LOAD_TARGET'){sceneSignature='';cameraEstimator=new PlanarCameraEstimator();targets.clear();buffers?.dispose();buffers=new GrayBuffers(cv);orb?.delete();orb=createORB(cv);}
       if(!buffers||!orb)throw new Error('Cargar primero un marcador.');
-      targets.set(targetId,new ImageTargetState(cv,decoded));
+      targets.set(targetId,new ImageTargetState(cv,decoded,message.cylinderDiameterMeters));
       scope.postMessage({id:message.id,ok:true,result:null});return;
     }
     if(!cv||!buffers||!orb)throw new Error('Cargar marcadores primero.');

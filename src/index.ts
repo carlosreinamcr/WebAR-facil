@@ -19,3 +19,4 @@ export {registerAFrameVideoComponent} from './wrappers/aframe-video';
 export {registerARComponents} from './wrappers/web-components';
 export type {ARComponentsOptions,ARSceneElement,ARModelElement,ARVideoElement} from './wrappers/web-components';
 export type {PlacementState} from './wrappers/SurfacePlacement';
+export type {ARHandTapDetail} from './wrappers/HandInteraction';

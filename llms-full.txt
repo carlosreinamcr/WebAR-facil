@@ -161,7 +161,7 @@ El recorrido recomendado utiliza **HTML declarativo**. Un script y etiquetas par
 
 Con el servidor iniciado, abre:
 
-- [Galería de 31 ejemplos](../examples/PRUEBAS/index.html). GLB, gestos, vídeo, mapas locales, colocación y escala métrica experimental.
+- [Galería de 35 ejemplos](../examples/PRUEBAS/index.html). GLB, gestos, vídeo, mapas locales, colocación y escala métrica experimental.
 
 - [HTML declarativo](../examples/declarative.html): imagen y GLB sin JavaScript propio.
 - [SLAM declarativo](../examples/declarative-slam.html): odometría sin marcador.
@@ -1243,6 +1243,34 @@ Comprueba las capacidades en ejecución. Android no implica que WebXR esté disp
 En móviles los controles están arriba del visor, antes de la imagen de cámara. Si el ejemplo incluye un formulario anterior, desplázate hasta el inicio de la escena. Con `gestures`, toca el modelo y arrastra para girar o pellizca para escalar; los márgenes del visor tampoco desplazan la página.
 
 En tools/device-tests.html, Probar SLAM sin marcador configura e inicia el modo óptico directamente; no requiere imagen. La opción Imagen → odometría sí requiere imagen para la transición. En WebXR, el botón Activar SLAM solicita la sesión nativa con gesto del usuario, y la selección de superficie se realiza dentro de XR.
+## Malla del entorno (ejemplo 32)
+
+El [ejemplo de malla y oclusión](../examples/PRUEBAS/32-malla-entorno.html) usa el seguimiento óptico con cámara RGB. Mueve el teléfono de lado sobre una mesa o superficie con textura. Toca un triángulo para colocar a Kai y cambia de ángulo. «Mostrar malla» controla la visualización de la geometría y «Oclusión» controla si esta escribe profundidad y oculta partes del modelo.
+
+La escena usa `ThreeARScene` y consulta `exportSLAMMap()` como máximo una vez cada 500 ms, cuando la consulta anterior ya terminó. Solo triangula fotogramas clave nuevos. Proyecta sus puntos a una rejilla y conecta vecinos con profundidades similares. Acumula los triángulos en bloques 3D alineados con el suelo y descarta duplicados por proximidad de vértices. Los bloques se conservan en memoria durante la sesión aunque cambien los fotogramas clave. Un raycast sobre la malla coloca a Kai y el escaneo sigue activo hasta que lo pauses.
+
+El panel de cobertura muestra una vista superior de las zonas con triángulos y la posición de la cámara. Cada cuadro puede contener huecos. Hay un presupuesto de 96 bloques y 256 triángulos por bloque, con un máximo teórico de 24.576. Si un bloque se llena, otras zonas todavía pueden incorporar geometría. El tamaño de bloque se calcula a partir de la primera distancia a la superficie y usa las unidades relativas del mapa.
+
+La reconstrucción es experimental, parcial y de escala relativa. Puede dejar huecos en paredes lisas y estimar mal los bordes, el vidrio o los objetos en movimiento. Durante una pérdida de seguimiento se ocultan la malla y el modelo. Si se reinicia el mapa, vuelve a escanear y coloca el modelo de nuevo.
+
+Al apartar la cámara y volver, compara la malla contra un borde físico identificable. Si se desplaza con el seguimiento activo, puede haber deriva de la pose o errores en la geometría estimada. El ejemplo activa la corrección local con fotogramas clave e indica cuándo el motor ajusta o relocaliza la cámara. Esto corrige la pose cuando hay suficientes coincidencias verificadas. Los bloques ya guardados conservan su geometría y el contador mide cobertura, no precisión.
+## Mapa 3D de un objeto (ejemplo 33)
+
+En el [ejemplo 33](../examples/PRUEBAS/33-mapa-3d-objeto.html), mantén quieto un objeto con textura y captura hasta 24 vistas desde distintas posiciones. Desplázate alrededor manteniendo detalles en común entre tomas. El visor inferior permite girar y ampliar la nube. Cada color indica qué vista aportó los puntos por primera vez. Después de cada toma se indica cuántos puntos nuevos se incorporaron.
+
+La escena solicita el fotograma clave actual con `exportSLAMMap({includeCurrentView:true})`, selecciona los puntos que caen dentro de la guía y retiene el grupo de puntos 3D conectado al centro. Cada vista adicional debe compartir puntos con la nube acumulada. Acumula los puntos en el sistema de coordenadas del mapa y agrupa duplicados por celda 3D. La nube es dispersa y de escala relativa. Puede incluir fondo y se conserva mientras la página está abierta. Este ejemplo todavía no usa esa nube para reconocer el objeto en otra sesión.
+## Etiqueta cilíndrica (ejemplo 34)
+
+El [ejemplo 34](../examples/PRUEBAS/34-etiqueta-curva.html) permite cargar el JPG o PNG de una etiqueta desplegada o imprimir una muestra de 100 mm de ancho. Mide el diámetro exterior en la parte recta del envase y el ancho de la etiqueta siguiendo la curva. Si el papel se solapa, mide la parte visible. El alto se calcula con la proporción de la imagen.
+
+Llama a `engine.addImageTarget('etiqueta', imagen, {physicalWidthMeters: 0.1, cylinderDiameterMeters: 0.066})`. El origen está en el eje del cilindro a mitad de la altura de la etiqueta. La curvatura se aplica al registrar la imagen y el archivo WART conserva los descriptores de la imagen desplegada. El seguimiento es experimental. Necesita una etiqueta con detalles visibles y una sección de diámetro constante. Las botellas cónicas y la transferencia de pose de la etiqueta curva a un anclaje SLAM quedan fuera de esta prueba.
+## Interacción con las manos (ejemplo 35)
+
+En el [ejemplo 35](../examples/PRUEBAS/35-interaccion-manos.html), MediaPipe Hand Landmarker sigue el índice en el vídeo de la misma cámara AR. Añade `<webar-hands cursor gesture="pinch"></webar-hands>` dentro de la escena y marca los modelos seleccionables con `hand-target`. Apunta al modelo con el índice y junta el índice con el pulgar. El modelo emite `ar-hand-tap` con `detail.element`, `detail.object`, `detail.point` (coordenadas 3D del impacto) y `detail.gesture`. Con `gesture="dwell"`, mantener el cursor sobre el mismo modelo durante 650 ms dispara una interacción.
+
+El punto del índice se proyecta sobre la escena 3D. Esto permite apuntar a un modelo desde el aire. La coincidencia se calcula en la imagen de la cámara y no mide la distancia real entre el dedo y el objeto virtual. El componente funciona con el vídeo de una escena Three.js declarativa. La detección se omite mientras una sesión WebXR inmersiva controla el visor.
+
+Los atributos opcionales `runtime-src`, `wasm-path` y `model-src` permiten alojar localmente el módulo ESM, su carpeta WASM y `hand_landmarker.task`. Los valores predeterminados descargan MediaPipe y el modelo al iniciar la escena. Los fotogramas se procesan en el navegador. Escucha `hand-ready` o `hand-error` para mostrar el estado. La inferencia síncrona usa un vídeo reducido y una frecuencia máxima configurable por `fps` (12 por defecto, de 1 a 20). En `webar-scene`, `facing-mode="user"` solicita la cámara frontal y `facing-mode="environment"` la trasera.
 
 
 ---
@@ -2745,6 +2773,7 @@ Los imports relativos se muestran en su contexto original. Estos bloques describ
 | `ARComponentsOptions` | Tipo | `webar-facil` |
 | `ARDiagnostics` | Valor y/o tipo | `webar-facil/core`, `webar-facil` |
 | `AREventMap` | Tipo | `webar-facil/core`, `webar-facil` |
+| `ARHandTapDetail` | Tipo | `webar-facil` |
 | `ARModelElement` | Tipo | `webar-facil` |
 | `ARModelLoadOptions` | Tipo | `webar-facil` |
 | `ARModelOptions` | Tipo | `webar-facil` |
@@ -2909,6 +2938,8 @@ export interface ImageTargetOptions {
     /** Opcional: escala de referencia de 0.2 m por defecto; no requiere medir el marcador. */
     physicalWidthMeters?: number;
     maxDimension?: number;
+    /** Experimental. Diámetro exterior de la zona cilíndrica de la etiqueta, en metros. */
+    cylinderDiameterMeters?: number;
 }
 export interface ImageTargetMetadata {
     format: 'WART';
@@ -2986,7 +3017,7 @@ export declare class WebAREngine {
 
 ```ts
 export declare const LIBRARY_VERSION = "0.1.0-alpha.6";
-export declare const LIBRARY_BUILD = "1c906eb944d9f8f4";
+export declare const LIBRARY_BUILD = "3e7d0e35b6e318fe";
 ```
 
 ## calibration/CalibrationSession.d.ts
@@ -3678,11 +3709,12 @@ export declare class Tracker {
     constructor(options?: TrackerOptions);
     get state(): 'idle' | 'busy' | 'disposed';
     get hasTarget(): boolean;
-    loadTarget(buffer: ArrayBuffer, signal?: AbortSignal, targetId?: string): Promise<void>;
+    loadTarget(buffer: ArrayBuffer, signal?: AbortSignal, targetId?: string, cylinderDiameterMeters?: number): Promise<void>;
     get targetIds(): readonly string[];
     loadTargets(targets: readonly {
         id: string;
         buffer: ArrayBuffer;
+        cylinderDiameterMeters?: number;
     }[], signal?: AbortSignal): Promise<void>;
     processFrame(frame: CameraFrame, signal?: AbortSignal, calibrationOverride?: CameraIntrinsics): Promise<TrackingResult | null>;
     /** Un RGBA y un Worker para todos los marcadores. No duplicar el frame por target. */
@@ -3866,6 +3898,21 @@ export declare function normalizedPixel(x: number, y: number, k: CameraIntrinsic
     number,
     number
 ];
+```
+
+## wrappers/HandInteraction.d.ts
+
+```ts
+import { type Object3D, type Vector3 } from 'three';
+import type { ARModelElement } from './web-components.js';
+export interface ARHandTapDetail {
+    readonly element: ARModelElement;
+    readonly object: Object3D;
+    readonly point: Vector3;
+    readonly gesture: 'pinch' | 'dwell';
+}
+/** Registra únicamente el adaptador; MediaPipe se descarga al iniciar una escena con manos. */
+export declare function registerHandInteraction(): void;
 ```
 
 ## wrappers/SurfacePlacement.d.ts
@@ -4654,7 +4701,7 @@ WebAR Fácil is an MIT-licensed TypeScript library for building browser-based au
 
 ## Run an example
 
-The [gallery of 31 examples](../../examples/PRUEBAS/index.html) covers markers, gestures, 3D models, video, surfaces and local maps. Use the [image example](../../examples/declarative.html) for a first test, the [video example](../../examples/declarative-video.html) for chroma key, or the [placement example](../../examples/declarative-placement.html) for a surface.
+The [gallery of 35 examples](../../examples/PRUEBAS/index.html) covers markers, gestures, 3D models, video, surfaces and local maps. Use the [image example](../../examples/declarative.html) for a first test, the [video example](../../examples/declarative-video.html) for chroma key, or the [placement example](../../examples/declarative-placement.html) for a surface.
 
 Image tracking and optical odometry work with ordinary camera capture. Native immersive WebXR depends on the browser and device. Optical placement without a metric reference uses relative scale. [Tracking modes](spatial-tracking.md)
 
@@ -5056,6 +5103,34 @@ Optical SLAM compares each recovery frame against up to **50 saved views**. It e
 **Basic validation** requires at least 15 geometrically consistent points, at least 40% of that view's matches, and coverage across at least 4 image cells. The bounding rectangle of those points must cover at least 8% of the analyzed frame.
 
 **Single-frame confirmation** requires at least 30 inliers, a 65% inlier ratio, coverage across 6 cells, and reprojection error below 1.5 pixels. If the estimate only passes basic validation, the engine requires two compatible observations. If a tabletop has little texture, frame its edges and surroundings to give the engine more visual references.
+## Environment mesh (example 32)
+
+The [mesh and occlusion example](../../examples/PRUEBAS/32-malla-entorno.html) uses optical tracking with an RGB camera. Move the phone sideways over a textured surface, tap a triangle to place Kai, then change your viewpoint. “Mostrar malla” shows the geometry and “Oclusión” enables depth writes so the geometry can hide parts of the model.
+
+The scene uses `ThreeARScene` and calls `exportSLAMMap()` at most once every 500 ms, after the previous export has completed. It triangulates only new keyframes by projecting their points onto a grid and connecting neighbors at similar depths. Triangles accumulate in floor-aligned 3D blocks, with duplicate triangles filtered by quantized vertex positions. Blocks remain in memory for the session after keyframes are replaced. A raycast places Kai and scanning continues until you pause it.
+
+The coverage panel shows a top view of blocks with triangles and the current camera position. Individual blocks can contain gaps. The demo budgets 96 blocks and 256 triangles per block, for a theoretical maximum of 24,576. Other blocks can still grow when a block is full. Block size comes from the first camera-to-surface distance and uses relative map units.
+
+The reconstruction is experimental, partial, and relative in scale. Smooth walls can have gaps, and edges, glass, and moving objects can produce poor estimates. Tracking loss hides the mesh and model. If the map resets, scan again and place the model again.
+
+After pointing the camera away and returning, compare the mesh with an identifiable physical edge. A shift while tracking stays active may come from pose drift or errors in the estimated geometry. The demo enables local keyframe correction and reports when the engine adjusts or relocalizes the camera. It corrects the pose when enough verified matches are available. Stored blocks keep their geometry, and the counter measures coverage rather than accuracy.
+## Object point cloud (example 33)
+
+In [example 33](../../examples/PRUEBAS/33-mapa-3d-objeto.html), keep a textured object still and capture up to 24 views from different positions. Move around it while keeping shared details in frame. Use the lower viewer to rotate and zoom the cloud. Each color shows which view first contributed those points. After each capture, the app reports how many new points were added.
+
+The scene requests the current keyframe via `exportSLAMMap({includeCurrentView:true})`, selects landmarks within the framing guide, and keeps the 3D cluster connected to the center. Each additional view must share points with the accumulated cloud. It accumulates landmarks in map coordinates and merges duplicates by 3D cell. The cloud is sparse, uses relative scale, and may include the background. It remains in memory while the page is open. This demo does not yet use the cloud to recognize the object in a new session.
+## Cylindrical label (example 34)
+
+[Example 34](../../examples/PRUEBAS/34-etiqueta-curva.html) accepts an unwrapped JPG or PNG label and includes a printable 100 mm sample. Measure the outer diameter across the straight section and the label width along the curve, using the visible width if the paper overlaps. Label height follows the image aspect ratio.
+
+Call `engine.addImageTarget('label', image, {physicalWidthMeters: 0.1, cylinderDiameterMeters: 0.066})`. The anchor sits on the cylinder axis at the label's mid-height. Curvature is applied at registration and WART retains the flat image descriptors. Tracking is experimental and requires a textured label on a constant-diameter section. Conical bottles and transfer from a curved-label pose to a SLAM anchor are outside this example.
+## Hand interaction (example 35)
+
+In [example 35](../../examples/PRUEBAS/35-interaccion-manos.html), MediaPipe Hand Landmarker tracks the index fingertip on the same video stream as AR. Add `<webar-hands cursor gesture="pinch"></webar-hands>` to the scene and mark selectable models with `hand-target`. Aim at a model and bring your index finger and thumb together. The model emits `ar-hand-tap` with `detail.element`, `detail.object`, `detail.point` (the 3D hit position) and `detail.gesture`. With `gesture="dwell"`, holding the cursor over the same model for 650 ms triggers an interaction.
+
+The fingertip is projected onto the 3D scene from its camera image coordinates. This supports mid-air pointing and does not measure physical distance between the finger and the virtual object. The component uses the video of a declarative Three.js scene and suspends detection during immersive WebXR.
+
+Use `runtime-src`, `wasm-path`, and `model-src` to self-host the ESM module, its WASM directory, and `hand_landmarker.task`. By default they load when a scene with hand interaction starts. Camera frames are processed in the browser. Listen for `hand-ready` and `hand-error` to report status. Synchronous inference uses reduced-resolution video and an `fps` limit (12 by default, range 1 to 20). On `webar-scene`, `facing-mode="user"` requests the front camera and `facing-mode="environment"` requests the rear camera.
 
 ---
 Source: docs/en/diagnostics.md
@@ -5443,6 +5518,7 @@ Generated from the public exports and TypeScript declarations. Relative imports 
 | `ARComponentsOptions` | Type | `webar-facil` |
 | `ARDiagnostics` | Value and/or type | `webar-facil/core`, `webar-facil` |
 | `AREventMap` | Type | `webar-facil/core`, `webar-facil` |
+| `ARHandTapDetail` | Type | `webar-facil` |
 | `ARModelElement` | Type | `webar-facil` |
 | `ARModelLoadOptions` | Type | `webar-facil` |
 | `ARModelOptions` | Type | `webar-facil` |
@@ -5595,6 +5671,7 @@ export interface EngineOptions {
 export interface ImageTargetOptions {
     physicalWidthMeters?: number;
     maxDimension?: number;
+    cylinderDiameterMeters?: number;
 }
 export interface ImageTargetMetadata {
     format: 'WART';
@@ -5665,7 +5742,7 @@ export declare class WebAREngine {
 
 ```ts
 export declare const LIBRARY_VERSION = "0.1.0-alpha.6";
-export declare const LIBRARY_BUILD = "1c906eb944d9f8f4";
+export declare const LIBRARY_BUILD = "3e7d0e35b6e318fe";
 ```
 
 ## calibration/CalibrationSession.d.ts
@@ -6294,11 +6371,12 @@ export declare class Tracker {
     constructor(options?: TrackerOptions);
     get state(): 'idle' | 'busy' | 'disposed';
     get hasTarget(): boolean;
-    loadTarget(buffer: ArrayBuffer, signal?: AbortSignal, targetId?: string): Promise<void>;
+    loadTarget(buffer: ArrayBuffer, signal?: AbortSignal, targetId?: string, cylinderDiameterMeters?: number): Promise<void>;
     get targetIds(): readonly string[];
     loadTargets(targets: readonly {
         id: string;
         buffer: ArrayBuffer;
+        cylinderDiameterMeters?: number;
     }[], signal?: AbortSignal): Promise<void>;
     processFrame(frame: CameraFrame, signal?: AbortSignal, calibrationOverride?: CameraIntrinsics): Promise<TrackingResult | null>;
     processTargetsFrame(frame: CameraFrame, signal?: AbortSignal): Promise<TrackingBatchResult | null>;
@@ -6477,6 +6555,20 @@ export declare function normalizedPixel(x: number, y: number, k: CameraIntrinsic
     number,
     number
 ];
+```
+
+## wrappers/HandInteraction.d.ts
+
+```ts
+import { type Object3D, type Vector3 } from 'three';
+import type { ARModelElement } from './web-components.js';
+export interface ARHandTapDetail {
+    readonly element: ARModelElement;
+    readonly object: Object3D;
+    readonly point: Vector3;
+    readonly gesture: 'pinch' | 'dwell';
+}
+export declare function registerHandInteraction(): void;
 ```
 
 ## wrappers/SurfacePlacement.d.ts

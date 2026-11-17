@@ -74,6 +74,34 @@ Comprueba las capacidades en ejecución. Android no implica que WebXR esté disp
 En móviles los controles están arriba del visor, antes de la imagen de cámara. Si el ejemplo incluye un formulario anterior, desplázate hasta el inicio de la escena. Con `gestures`, toca el modelo y arrastra para girar o pellizca para escalar; los márgenes del visor tampoco desplazan la página.
 
 En tools/device-tests.html, Probar SLAM sin marcador configura e inicia el modo óptico directamente; no requiere imagen. La opción Imagen → odometría sí requiere imagen para la transición. En WebXR, el botón Activar SLAM solicita la sesión nativa con gesto del usuario, y la selección de superficie se realiza dentro de XR.
+## Malla del entorno (ejemplo 32)
+
+El [ejemplo de malla y oclusión](../examples/PRUEBAS/32-malla-entorno.html) usa el seguimiento óptico con cámara RGB. Mueve el teléfono de lado sobre una mesa o superficie con textura. Toca un triángulo para colocar a Kai y cambia de ángulo. «Mostrar malla» controla la visualización de la geometría y «Oclusión» controla si esta escribe profundidad y oculta partes del modelo.
+
+La escena usa `ThreeARScene` y consulta `exportSLAMMap()` como máximo una vez cada 500 ms, cuando la consulta anterior ya terminó. Solo triangula fotogramas clave nuevos. Proyecta sus puntos a una rejilla y conecta vecinos con profundidades similares. Acumula los triángulos en bloques 3D alineados con el suelo y descarta duplicados por proximidad de vértices. Los bloques se conservan en memoria durante la sesión aunque cambien los fotogramas clave. Un raycast sobre la malla coloca a Kai y el escaneo sigue activo hasta que lo pauses.
+
+El panel de cobertura muestra una vista superior de las zonas con triángulos y la posición de la cámara. Cada cuadro puede contener huecos. Hay un presupuesto de 96 bloques y 256 triángulos por bloque, con un máximo teórico de 24.576. Si un bloque se llena, otras zonas todavía pueden incorporar geometría. El tamaño de bloque se calcula a partir de la primera distancia a la superficie y usa las unidades relativas del mapa.
+
+La reconstrucción es experimental, parcial y de escala relativa. Puede dejar huecos en paredes lisas y estimar mal los bordes, el vidrio o los objetos en movimiento. Durante una pérdida de seguimiento se ocultan la malla y el modelo. Si se reinicia el mapa, vuelve a escanear y coloca el modelo de nuevo.
+
+Al apartar la cámara y volver, compara la malla contra un borde físico identificable. Si se desplaza con el seguimiento activo, puede haber deriva de la pose o errores en la geometría estimada. El ejemplo activa la corrección local con fotogramas clave e indica cuándo el motor ajusta o relocaliza la cámara. Esto corrige la pose cuando hay suficientes coincidencias verificadas. Los bloques ya guardados conservan su geometría y el contador mide cobertura, no precisión.
+## Mapa 3D de un objeto (ejemplo 33)
+
+En el [ejemplo 33](../examples/PRUEBAS/33-mapa-3d-objeto.html), mantén quieto un objeto con textura y captura hasta 24 vistas desde distintas posiciones. Desplázate alrededor manteniendo detalles en común entre tomas. El visor inferior permite girar y ampliar la nube. Cada color indica qué vista aportó los puntos por primera vez. Después de cada toma se indica cuántos puntos nuevos se incorporaron.
+
+La escena solicita el fotograma clave actual con `exportSLAMMap({includeCurrentView:true})`, selecciona los puntos que caen dentro de la guía y retiene el grupo de puntos 3D conectado al centro. Cada vista adicional debe compartir puntos con la nube acumulada. Acumula los puntos en el sistema de coordenadas del mapa y agrupa duplicados por celda 3D. La nube es dispersa y de escala relativa. Puede incluir fondo y se conserva mientras la página está abierta. Este ejemplo todavía no usa esa nube para reconocer el objeto en otra sesión.
+## Etiqueta cilíndrica (ejemplo 34)
+
+El [ejemplo 34](../examples/PRUEBAS/34-etiqueta-curva.html) permite cargar el JPG o PNG de una etiqueta desplegada o imprimir una muestra de 100 mm de ancho. Mide el diámetro exterior en la parte recta del envase y el ancho de la etiqueta siguiendo la curva. Si el papel se solapa, mide la parte visible. El alto se calcula con la proporción de la imagen.
+
+Llama a `engine.addImageTarget('etiqueta', imagen, {physicalWidthMeters: 0.1, cylinderDiameterMeters: 0.066})`. El origen está en el eje del cilindro a mitad de la altura de la etiqueta. La curvatura se aplica al registrar la imagen y el archivo WART conserva los descriptores de la imagen desplegada. El seguimiento es experimental. Necesita una etiqueta con detalles visibles y una sección de diámetro constante. Las botellas cónicas y la transferencia de pose de la etiqueta curva a un anclaje SLAM quedan fuera de esta prueba.
+## Interacción con las manos (ejemplo 35)
+
+En el [ejemplo 35](../examples/PRUEBAS/35-interaccion-manos.html), MediaPipe Hand Landmarker sigue el índice en el vídeo de la misma cámara AR. Añade `<webar-hands cursor gesture="pinch"></webar-hands>` dentro de la escena y marca los modelos seleccionables con `hand-target`. Apunta al modelo con el índice y junta el índice con el pulgar. El modelo emite `ar-hand-tap` con `detail.element`, `detail.object`, `detail.point` (coordenadas 3D del impacto) y `detail.gesture`. Con `gesture="dwell"`, mantener el cursor sobre el mismo modelo durante 650 ms dispara una interacción.
+
+El punto del índice se proyecta sobre la escena 3D. Esto permite apuntar a un modelo desde el aire. La coincidencia se calcula en la imagen de la cámara y no mide la distancia real entre el dedo y el objeto virtual. El componente funciona con el vídeo de una escena Three.js declarativa. La detección se omite mientras una sesión WebXR inmersiva controla el visor.
+
+Los atributos opcionales `runtime-src`, `wasm-path` y `model-src` permiten alojar localmente el módulo ESM, su carpeta WASM y `hand_landmarker.task`. Los valores predeterminados descargan MediaPipe y el modelo al iniciar la escena. Los fotogramas se procesan en el navegador. Escucha `hand-ready` o `hand-error` para mostrar el estado. La inferencia síncrona usa un vídeo reducido y una frecuencia máxima configurable por `fps` (12 por defecto, de 1 a 20). En `webar-scene`, `facing-mode="user"` solicita la cámara frontal y `facing-mode="environment"` la trasera.
 
 
 ## Autoría / Credits
