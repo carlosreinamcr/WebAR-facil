@@ -45,6 +45,8 @@ El fragmento supone que el HTML está junto al bundle. [Inicio](docs/getting-sta
 
 ## Capacidades
 
+- **Reconocimiento de celulares** con un detector opcional que se distribuye por separado del SDK. [Ejemplo 31](examples/PRUEBAS/31-reconocer-celular.html) · [Guía de instalación](docs/phone-detection.md)
+- **Interacción con la mano mediante MediaPipe** con `<webar-hands>`. Apunta a un modelo y pellizca en el aire para activar `ar-hand-tap`. [Ejemplo 35](examples/PRUEBAS/35-interaccion-manos.html) · [Guía de integración](docs/placement.md#interacción-con-las-manos-ejemplo-35)
 - Hasta 8 imágenes diferentes con contenido y eventos por ID.
 - Tolerancia de pérdida configurable, filtrado y retención visual opcional.
 - Eventos `targetFound`, `targetLost`, `trackingQuality`, `targetVisibility`.

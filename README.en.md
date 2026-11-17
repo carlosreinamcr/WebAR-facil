@@ -21,6 +21,11 @@ Copy the compiled script from `dist/` and serve your project over HTTP on localh
 
 The project also provides a JavaScript API, Three.js and A-Frame integrations, WebXR hit testing, and an optical tracking fallback. [Tracking modes and limits](docs/en/tracking.md)
 
+## Capabilities
+
+- **Phone recognition** with an optional detector distributed separately from the SDK. [Example 31](examples/PRUEBAS/31-reconocer-celular.html) · [Setup guide](docs/en/phone-detection.md)
+- **MediaPipe hand interaction** with `<webar-hands>`. Point at a model and pinch in the air to trigger `ar-hand-tap`. [Example 35](examples/PRUEBAS/35-interaccion-manos.html) · [Integration guide](docs/en/placement.md#hand-interaction-example-35)
+
 
 ## Autoría / Credits
 
