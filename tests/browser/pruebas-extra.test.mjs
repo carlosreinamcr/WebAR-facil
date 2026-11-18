@@ -4,12 +4,12 @@ import {readdir,readFile,writeFile} from 'node:fs/promises';
 import {createServer} from 'vite';
 import {chromium} from 'playwright';
 import sharp from 'sharp';
-import {prepareFrames,prepareExampleMarkerFrame,virtualCamera} from './helpers.mjs';
+import {prepareFrames,virtualCamera} from './helpers.mjs';
 
-let server,browser,exampleMarker,files;
+let server,browser,frames,files;
 const origin='http://127.0.0.1:5199';
 before(async()=>{
- await prepareFrames();exampleMarker=await prepareExampleMarkerFrame();
+ frames=await prepareFrames({markerSource:'examples/assets/marcador.jpg',framePrefix:'example-motion'});
  files=(await readdir('examples/PRUEBAS')).filter(name=>/^(1[4-9]|2[0-5])-.*\.html$/.test(name)).sort();
  const a=await sharp('examples/assets/marcador.jpg').resize(240,180).png().toBuffer(),b=await sharp('examples/assets/marcador2.jpg').resize(240,180).png().toBuffer();
  for(const [name,showA] of [['extra-both',true],['extra-only-b',false]]){
@@ -21,7 +21,7 @@ before(async()=>{
  browser=await chromium.launch({...(channel?{channel}:{}),headless:true,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 });
 after(async()=>{await browser?.close();await server?.close();});
-async function open(number,images=[exampleMarker,'/tests/generated/multi/blank.png']){
+async function open(number,images=[frames[0],'/tests/generated/multi/blank.png']){
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
  if(number===25)await page.addInitScript(()=>{window.__motionPermissionRequests=0;if(globalThis.DeviceOrientationEvent)DeviceOrientationEvent.requestPermission=async()=>{window.__motionPermissionRequests++;return 'granted';};});
  await virtualCamera(page,images);await page.goto(origin+'/examples/PRUEBAS/'+files[number-14]);return page;
@@ -107,7 +107,7 @@ test('PRUEBAS 19–24: picking, catálogo, transición real, rechazo XR, perfile
  page=await open(20);
  try{
   await start(page);await page.evaluate(()=>{window.__stream=document.querySelector('#ar').engine.videoElement.srcObject;});
-  await page.selectOption('#product','cohete.glb');await page.waitForFunction(()=>!!document.querySelector('#model').model.model.getObjectByName('fusaje'));
+  await page.selectOption('#product','cohete-catalogo.glb');await page.waitForFunction(()=>!!document.querySelector('#model').model.model.getObjectByName('fusaje'));
   await page.locator('#color').evaluate(input=>{input.value='#ff0000';input.dispatchEvent(new Event('input',{bubbles:true}));});
   assert.equal(await page.evaluate(()=>document.querySelector('#model').model.model.getObjectByName('fusaje').material.color.getHexString()),'ff0000');
   assert.equal(await page.evaluate(()=>document.querySelector('#ar').engine.videoElement.srcObject===window.__stream),true);

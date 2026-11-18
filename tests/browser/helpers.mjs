@@ -4,8 +4,9 @@ import {openCV} from '../../scripts/opencv-node.mjs';
 import {scene,renderMarker,intrinsics} from '../fixtures/render-scene.mjs';
 import {prepareMultiTargets} from '../fixtures/multi-target.mjs';
 
-export async function prepareFrames(){
-  const{cv}=await openCV(),world=scene(208,true),marker=await sharp('public/marker.png').ensureAlpha().raw().toBuffer();
+export async function prepareFrames({markerSource='public/marker.png',framePrefix='frame'}={}){
+  const{cv}=await openCV(),world=scene(208,true);
+  const marker=await sharp(markerSource).resize(800,600,{fit:'fill'}).ensureAlpha().raw().toBuffer();
   await mkdir('tests/generated',{recursive:true});
   await prepareMultiTargets();
   await writeFile('tests/generated/calibration.json',JSON.stringify(intrinsics));
@@ -17,7 +18,7 @@ export async function prepareFrames(){
   for(let i=0;i<42;i++){
     const x=i*.002,image=world.render(x).data;
     const data=i<30?renderMarker(cv,image,marker,x):image;
-    const path=`tests/generated/frame-${String(i).padStart(2,'0')}.png`;
+    const path=`tests/generated/${framePrefix}-${String(i).padStart(2,'0')}.png`;
     await sharp(data,{raw:{width:640,height:480,channels:4}}).png().toFile(path);frames.push('/'+path);
   }
   return frames;
