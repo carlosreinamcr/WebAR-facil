@@ -69,18 +69,35 @@ async function contentChecks(page,number){
  const kind=(number-1)%6+1;
  if(kind===1){assert.equal(await page.evaluate(()=>!!document.querySelector('#model').model.model.getObjectByName('cabeza')),true);}
  if(kind===2){
-  async function center(){return page.evaluate(()=>{
+  async function center(){
+   await page.locator('webar-scene canvas').scrollIntoViewIfNeeded();
+   return page.evaluate(()=>{
    const {THREE}=WebARFacil,app=document.querySelector('#ar').app,model=document.querySelector('#model').model;
    model.updateWorldMatrix(true,true);const point=new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3()).project(app.camera),rect=app.renderer.domElement.getBoundingClientRect();
-   return{x:rect.left+(point.x+1)/2*rect.width,y:rect.top+(1-point.y)/2*rect.height};
+   const cx=rect.left+(point.x+1)/2*rect.width,cy=rect.top+(1-point.y)/2*rect.height;
+   const clip=app.renderer.domElement.parentElement.getBoundingClientRect();
+   const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+   for(let radius=0;radius<=90;radius+=3){
+    for(let angle=0;angle<Math.PI*2;angle+=Math.PI/6){
+     const x=cx+radius*Math.cos(angle),y=cy+radius*Math.sin(angle);
+     if(x<Math.max(0,clip.left)+3||x>Math.min(innerWidth,clip.right)-26||
+       y<Math.max(0,clip.top)+3||y>Math.min(innerHeight,clip.bottom)-3)continue;
+     ray.setFromCamera(ndc.set((x-rect.left)/rect.width*2-1,1-(y-rect.top)/rect.height*2),app.camera);
+     if(ray.intersectObject(model,true).length)return {x,y};
+    }
+   }
+   return null;
   });}
   await page.getByRole('button',{name:'Mover',exact:true}).tap();let point=await center();
+  assert.ok(point,'El modelo tiene una zona visible para mover');
   await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+22,point.y,{steps:5});await page.mouse.up();
   assert.ok(await page.evaluate(()=>Math.abs(document.querySelector('#model').model.position.x)+Math.abs(document.querySelector('#model').model.position.z)>.001),'Mover cambia posición local');
   await page.getByRole('button',{name:'Girar y escalar',exact:true}).tap();point=await center();
+  assert.ok(point,'El modelo tiene una zona visible para girar');
   await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+22,point.y,{steps:5});await page.mouse.up();
   assert.ok(await page.evaluate(()=>Math.abs(document.querySelector('#model').model.rotation.y)>.01),'Arrastrar gira');
   point=await center();
+  assert.ok(point,'El modelo tiene una zona visible para pellizcar');
   const scale=await page.evaluate(({x,y})=>{
    const scene=document.querySelector('#ar'),canvas=scene.app.renderer.domElement,model=document.querySelector('#model').model;
    const before=model.scale.x;

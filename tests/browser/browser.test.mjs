@@ -353,9 +353,18 @@ test('WebKit: MP4 nativo con playsinline y reproducción explícita',{timeout:35
       await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='/dist/webar-facil.browser.min.js';script.onload=resolve;script.onerror=reject;document.head.append(script);});
       const video=new window.WebARFacil.ThreeARVideo({chromaKey:{color:'#00ff00'}});
       try{
-        await video.setSource('/tests/generated/chroma.mp4');await video.play();await new Promise(resolve=>setTimeout(resolve,200));
+        document.body.prepend(video.videoElement);
+        await video.setSource('/tests/generated/chroma.mp4');
+        const advanced=new Promise((resolve,reject)=>{
+          const timer=setTimeout(()=>{cleanup();reject(new Error('WebKit no avanzó el MP4.'));},10000);
+          const onTime=()=>{if(video.videoElement.currentTime>0){cleanup();resolve();}};
+          const cleanup=()=>{clearTimeout(timer);video.videoElement.removeEventListener('timeupdate',onTime);};
+          video.videoElement.addEventListener('timeupdate',onTime);
+          video.play().catch(error=>{cleanup();reject(error);});
+        });
+        await advanced;
         return{width:video.videoElement.videoWidth,time:video.videoElement.currentTime,inline:video.videoElement.playsInline,muted:video.videoElement.muted};
-      }finally{video.dispose();}
+      }finally{video.videoElement.remove();video.dispose();}
     });
     assert.equal(result.width,192);assert.equal(result.inline,true);assert.equal(result.muted,true);assert.ok(result.time>0);
   }finally{await engine.close();}

@@ -281,12 +281,36 @@ test('Herramienta móvil: Android/Chrome e iOS/WebKit emulados exportan diagnós
       await page.goto(origin+'/tools/device-tests.html');
       const quickStart=await page.getByRole('button',{name:'Iniciar cámara',exact:true}).boundingBox();
       assert.ok(quickStart&&quickStart.y>=0&&quickStart.y+quickStart.height<844,'Inicio visible antes del formulario móvil');
-      const syntheticCamera=await page.evaluate(()=>!!navigator.mediaDevices?.getUserMedia&&typeof HTMLCanvasElement.prototype.captureStream==='function');
+      const syntheticCamera=await page.evaluate(async()=>{
+        if(!navigator.mediaDevices?.getUserMedia||typeof HTMLCanvasElement.prototype.captureStream!=='function')return false;
+        const canvas=document.createElement('canvas'),video=document.createElement('video');
+        canvas.width=canvas.height=16;
+        const pixels=canvas.getContext('2d');
+        const stream=canvas.captureStream(15);
+        video.muted=true;video.playsInline=true;
+        video.style.cssText='position:fixed;top:0;left:0;width:16px;height:16px;pointer-events:none';
+        document.body.append(video);video.srcObject=stream;
+        let frame=0;
+        const paint=()=>{pixels.fillStyle=frame++%2?'#3980b3':'#8f3c24';pixels.fillRect(0,0,16,16);};
+        paint();const timer=setInterval(paint,70);
+        try{
+          void video.play().catch(()=>{});
+          const deadline=performance.now()+2500;
+          while(performance.now()<deadline){
+            if(video.videoWidth===16&&video.readyState>=2&&video.currentTime>0)return true;
+            await new Promise(resolve=>setTimeout(resolve,50));
+          }
+          return false;
+        }finally{
+          clearInterval(timer);stream.getTracks().forEach(track=>track.stop());
+          video.pause();video.srcObject=null;video.remove();
+        }
+      });
       if(syntheticCamera)await virtualCamera(page,[frames[0]]);
       else await page.addInitScript(()=>{if(navigator.mediaDevices)navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('Synthetic camera unavailable in this test environment','NotSupportedError');};});
       await page.reload();
       await page.selectOption('#platform',variant.platform);await page.fill('#device','Emulated '+variant.platform);await page.fill('#os','Automated fixture');await page.fill('#browser','Playwright');
-      await page.getByRole('button',{name:'Iniciar cámara',exact:true}).tap();
+      await page.getByRole('button',{name:'Iniciar cámara',exact:true}).click();
       if(syntheticCamera)await page.waitForFunction(()=>document.querySelector('webar-scene').getDiagnosticsReport()?.poses.count>0,{},{timeout:15000});
       else{await page.waitForFunction(()=>document.querySelector('webar-scene').getDiagnosticsReport()?.recording===false);console.log(`${variant.platform}: camera API/capture unavailable in this automated environment; verified error report, not camera tracking.`);}
       const downloading=page.waitForEvent('download');await page.click('#export');const download=await downloading,suite=JSON.parse(await readFile(await download.path(),'utf8'));
@@ -405,9 +429,9 @@ test('Herramienta móvil: discrepancia de build avisa sin bloquear cámara compa
    assert.match(await page.locator('#sdk-notice').innerText(),/Puedes iniciar la cámara/);
    assert.equal(await page.locator('#start-camera').isDisabled(),false);assert.equal(await page.locator('#start-flow').isDisabled(),false);
    assert.equal(await page.evaluate(()=>window.__permissionRequests),0,'No solicitar cámara sin gesto');
-   await page.locator('#start-camera').tap();await page.waitForFunction(()=>window.__permissionRequests===1&&document.querySelector('#message').textContent.includes('TEST_PERMISSION_DENIED'));
+   await page.locator('#start-camera').click();await page.waitForFunction(()=>window.__permissionRequests===1&&document.querySelector('#message').textContent.includes('TEST_PERMISSION_DENIED'));
    await page.waitForFunction(()=>!document.querySelector('#start-camera').disabled);
-   await page.getByRole('button',{name:'Iniciar AR',exact:true}).tap();await page.waitForFunction(()=>window.__permissionRequests===2);
+   await page.getByRole('button',{name:'Iniciar AR',exact:true}).click();await page.waitForFunction(()=>window.__permissionRequests===2);
    await page.waitForFunction(()=>!document.querySelector('#start-camera').disabled);
    assert.equal(await page.evaluate(()=>document.querySelector('webar-scene').engine),null);
    assert.equal(await page.locator('#sdk-notice').isVisible(),true);

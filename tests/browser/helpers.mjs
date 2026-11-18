@@ -50,8 +50,13 @@ export async function virtualCamera(page,frames,{width=640,height=480}={}){
       if(constraints.video.facingMode?.exact)throw new Error('Webcam must not require a rear camera.');
       const images=await Promise.all(frames.map(src=>new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=reject;image.src=src;})));
       const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const context=canvas.getContext('2d');
-      let index=0,moving=false;
-      const draw=()=>context.drawImage(images[index],0,0,width,height);
+      let index=0,moving=false,frame=0;
+      const draw=()=>{
+        context.drawImage(images[index],0,0,width,height);
+        // Los capturadores pueden omitir repintados idénticos.
+        context.fillStyle=frame++%2?'#121212':'#303030';
+        context.fillRect(0,0,2,2);
+      };
       draw();const timer=setInterval(()=>{if(moving)index=Math.min(images.length-1,index+1);draw();},100);
       const stream=canvas.captureStream(30);
       for(const track of stream.getTracks()){const stop=track.stop.bind(track);track.stop=()=>{clearInterval(timer);stop();};}
