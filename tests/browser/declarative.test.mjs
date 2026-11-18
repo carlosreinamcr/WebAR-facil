@@ -431,14 +431,20 @@ test('Herramienta móvil: discrepancia de build avisa sin bloquear cámara compa
    await page.addInitScript(()=>{
     window.__permissionRequests=0;
     const request=async()=>{window.__permissionRequests++;throw new DOMException('TEST_PERMISSION_DENIED','NotAllowedError');};
-    if(navigator.mediaDevices)navigator.mediaDevices.getUserMedia=request;
-    else Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getSupportedConstraints:()=>({}),getUserMedia:request}});
+    // Override the getter on this page so the engine and test use the same fixture,
+    // even when WebKit exposes its native MediaDevices object later during startup.
+    Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{
+      getSupportedConstraints:()=>({}),
+      getUserMedia:request,
+    }});
+    window.__mockGetUserMedia=request;
    });
    await page.goto(origin+'/dist/tools/device-tests.html');
    const installed=await page.evaluate(()=>({expected:document.querySelector('meta[name="webar-sdk-build"]').content,actual:WebARFacil.LIBRARY_BUILD,script:document.querySelector('script[src*="webar-facil.min.js"]').src,text:document.querySelector('#sdk-info').textContent}));
    assert.match(installed.expected,/^[a-f0-9]{16}$/);assert.equal(installed.expected,installed.actual);assert.ok(installed.script.includes('build='+installed.actual));assert.ok(installed.text.includes(installed.actual));
    await page.route(/webar-facil\.min\.js(?:\?.*)?$/,route=>route.fulfill({contentType:'text/javascript',body:code+'\nglobalThis.WebARFacil={...globalThis.WebARFacil,LIBRARY_BUILD:"0000000000000000"};'}));
    await page.reload();await page.waitForFunction(()=>!document.querySelector('#sdk-notice').hidden);
+    assert.equal(await page.evaluate(()=>navigator.mediaDevices?.getUserMedia===window.__mockGetUserMedia&&typeof window.__mockGetUserMedia==='function'),true,'La prueba debe usar el permiso simulado antes de pulsar Iniciar');
    assert.match(await page.locator('#sdk-notice').innerText(),/Puedes iniciar la cámara/);
    assert.equal(await page.locator('#start-camera').isDisabled(),false);assert.equal(await page.locator('#start-flow').isDisabled(),false);
    assert.equal(await page.evaluate(()=>window.__permissionRequests),0,'No solicitar cámara sin gesto');
