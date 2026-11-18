@@ -310,8 +310,9 @@ test('Herramienta móvil: Android/Chrome e iOS/WebKit emulados exportan diagnós
       else await page.addInitScript(()=>{if(navigator.mediaDevices)navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('Synthetic camera unavailable in this test environment','NotSupportedError');};});
       await page.reload();
       await page.selectOption('#platform',variant.platform);await page.fill('#device','Emulated '+variant.platform);await page.fill('#os','Automated fixture');await page.fill('#browser','Playwright');
-      await page.getByRole('button',{name:'Iniciar cámara',exact:true}).click();
-      if(syntheticCamera)await page.waitForFunction(()=>document.querySelector('webar-scene').getDiagnosticsReport()?.poses.count>0,{},{timeout:15000});
+      await page.waitForFunction(()=>document.querySelector('#sdk-info').textContent.startsWith('SDK '));
+      await page.getByRole('button',{name:'Iniciar cámara',exact:true}).tap();
+      if(syntheticCamera)await waitForDeviceTest(page,variant.platform,()=>document.querySelector('webar-scene').getDiagnosticsReport()?.poses.count>0);
       else{await page.waitForFunction(()=>document.querySelector('webar-scene').getDiagnosticsReport()?.recording===false);console.log(`${variant.platform}: camera API/capture unavailable in this automated environment; verified error report, not camera tracking.`);}
       const downloading=page.waitForEvent('download');await page.click('#export');const download=await downloading,suite=JSON.parse(await readFile(await download.path(),'utf8'));
       assert.equal(suite.kind,'webar-device-test-suite');assert.equal(suite.context.platform,variant.platform);assert.notEqual(suite.context.execution,'physical-user-reported');assert.equal(suite.reports[0].poses.count>0,syntheticCamera);
@@ -409,6 +410,18 @@ test('Herramienta móvil: cambiar modo aplica SLAM sin marcador y permite volver
  }finally{await page.evaluate(()=>document.querySelector('webar-scene')?.stop());await context.close();}
 });
 
+async function waitForDeviceTest(page,platform,condition){
+  try{
+    await page.waitForFunction(condition,null,{timeout:15000});
+  }catch(error){
+    const state=await page.evaluate(()=>{
+      const scene=document.querySelector('webar-scene'),report=scene.getDiagnosticsReport();
+      return {message:document.querySelector('#message').textContent,sceneStatus:scene.textContent.trim().slice(0,250),cameraRequests:window.__permissionRequests,recording:report?.recording,poses:report?.poses.count,frames:report?.tracking?.frames};
+    });
+    throw new Error(`${platform}: ${JSON.stringify(state)}`,{cause:error});
+  }
+}
+
 test('Herramienta móvil: discrepancia de build avisa sin bloquear cámara compatible y permite reintentar permisos',{timeout:45000},async()=>{
  const variants=[{browser,owned:false}];if(process.env.TEST_WEBKIT==='1')variants.push({browser:await webkit.launch({headless:true}),owned:true});
  const code=await readFile('dist/webar-facil.min.js','utf8');
@@ -429,9 +442,12 @@ test('Herramienta móvil: discrepancia de build avisa sin bloquear cámara compa
    assert.match(await page.locator('#sdk-notice').innerText(),/Puedes iniciar la cámara/);
    assert.equal(await page.locator('#start-camera').isDisabled(),false);assert.equal(await page.locator('#start-flow').isDisabled(),false);
    assert.equal(await page.evaluate(()=>window.__permissionRequests),0,'No solicitar cámara sin gesto');
-   await page.locator('#start-camera').click();await page.waitForFunction(()=>window.__permissionRequests===1&&document.querySelector('#message').textContent.includes('TEST_PERMISSION_DENIED'));
+    const platform=variant.owned?'iOS/WebKit':'Android/Chrome';
+    await page.locator('#start-camera').tap();
+    await waitForDeviceTest(page,platform,()=>window.__permissionRequests===1&&document.querySelector('#message').textContent.includes('TEST_PERMISSION_DENIED'));
    await page.waitForFunction(()=>!document.querySelector('#start-camera').disabled);
-   await page.getByRole('button',{name:'Iniciar AR',exact:true}).click();await page.waitForFunction(()=>window.__permissionRequests===2);
+    await page.getByRole('button',{name:'Iniciar AR',exact:true}).tap();
+    await waitForDeviceTest(page,platform,()=>window.__permissionRequests===2);
    await page.waitForFunction(()=>!document.querySelector('#start-camera').disabled);
    assert.equal(await page.evaluate(()=>document.querySelector('webar-scene').engine),null);
    assert.equal(await page.locator('#sdk-notice').isVisible(),true);
