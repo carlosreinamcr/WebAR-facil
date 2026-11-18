@@ -4,12 +4,13 @@ import {readdir,readFile,writeFile} from 'node:fs/promises';
 import {createServer} from 'vite';
 import {chromium} from 'playwright';
 import sharp from 'sharp';
-import {prepareFrames,virtualCamera} from './helpers.mjs';
+import {prepareFrames,prepareExampleMarkerFrame,virtualCamera} from './helpers.mjs';
 
-let server,browser,frames,files;
+let server,browser,exampleMarker,files;
 const origin='http://127.0.0.1:5199';
 before(async()=>{
- frames=await prepareFrames();files=(await readdir('examples/PRUEBAS')).filter(name=>/^(1[4-9]|2[0-5])-.*\.html$/.test(name)).sort();
+ await prepareFrames();exampleMarker=await prepareExampleMarkerFrame();
+ files=(await readdir('examples/PRUEBAS')).filter(name=>/^(1[4-9]|2[0-5])-.*\.html$/.test(name)).sort();
  const a=await sharp('examples/assets/marcador.jpg').resize(240,180).png().toBuffer(),b=await sharp('examples/assets/marcador2.jpg').resize(240,180).png().toBuffer();
  for(const [name,showA] of [['extra-both',true],['extra-only-b',false]]){
   const overlays=[{input:b,left:360,top:140}];if(showA)overlays.push({input:a,left:40,top:140});
@@ -20,14 +21,14 @@ before(async()=>{
  browser=await chromium.launch({...(channel?{channel}:{}),headless:true,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 });
 after(async()=>{await browser?.close();await server?.close();});
-async function open(number,images=[frames[0],'/tests/generated/multi/blank.png']){
+async function open(number,images=[exampleMarker,'/tests/generated/multi/blank.png']){
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
  if(number===25)await page.addInitScript(()=>{window.__motionPermissionRequests=0;if(globalThis.DeviceOrientationEvent)DeviceOrientationEvent.requestPermission=async()=>{window.__motionPermissionRequests++;return 'granted';};});
  await virtualCamera(page,images);await page.goto(origin+'/examples/PRUEBAS/'+files[number-14]);return page;
 }
 async function start(page){
  await page.getByRole('button',{name:'Iniciar AR',exact:true}).tap();
- await page.waitForFunction(()=>document.querySelector('#ar').app?.getAnchor('poster').visible);
+ await page.waitForFunction(()=>document.querySelector('#ar').app?.getAnchor('poster').visible,null,{timeout:15000});
 }
 
 test('PRUEBAS 14–25: rutas solicitadas, controles móviles y recursos fuente/distribución',{timeout:60000},async()=>{
@@ -36,7 +37,10 @@ test('PRUEBAS 14–25: rutas solicitadas, controles móviles y recursos fuente/d
  try{
   for(const prefix of ['/examples/PRUEBAS/','/dist/examples/PRUEBAS/'])for(const file of files){
    if(prefix.startsWith('/examples/')){
-    const html=await readFile('examples/PRUEBAS/'+file,'utf8');assert.ok(html.includes('src="../dist/webar-facil.min.js"'));if(!file.startsWith('22-'))assert.ok(html.includes('../assets/marcador.jpg'));
+    const html=await readFile('examples/PRUEBAS/'+file,'utf8');
+    const sdk=file.startsWith('25-')?'webar-facil.browser.min.js':'webar-facil.min.js';
+    assert.ok(html.includes('src="../dist/'+sdk+'"'),file);
+    if(!file.startsWith('22-'))assert.ok(html.includes('../assets/marcador.jpg'),file);
    }
    await page.goto(origin+prefix+file);
    const aframe=file.startsWith('25-');

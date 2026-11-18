@@ -3,16 +3,19 @@ import assert from 'node:assert/strict';
 import {readdir,readFile} from 'node:fs/promises';
 import {createServer} from 'vite';
 import {chromium,webkit} from 'playwright';
-import {prepareFrames,virtualCamera} from './helpers.mjs';
+import {prepareFrames,prepareExampleMarkerFrame,virtualCamera} from './helpers.mjs';
 import {floorScene} from '../fixtures/floor-scene.mjs';
 import sharp from 'sharp';
 import {writeFile} from 'node:fs/promises';
 
-let server,browser,frames,floorFrames;
+let server,browser,frames,floorFrames,exampleMarker;
 const origin='http://127.0.0.1:5198';
-let recipes;
+let recipes,galleryCount;
 before(async()=>{
- frames=await prepareFrames();recipes=(await readdir('examples/PRUEBAS')).filter(name=>/^\d\d-.*\.html$/.test(name)&&Number(name.slice(0,2))<=13).sort();
+ frames=await prepareFrames();
+ exampleMarker=await prepareExampleMarkerFrame();
+ const numbered=(await readdir('examples/PRUEBAS')).filter(name=>/^\d\d-.*\.html$/.test(name)).sort();
+ galleryCount=numbered.length;recipes=numbered.filter(name=>Number(name.slice(0,2))<=13);
  const world=floorScene();floorFrames=[];
  for(let index=0;index<55;index++){
   const file=`tests/generated/floor-${index}.png`,image=world.render(index*.012);
@@ -31,7 +34,7 @@ test('PRUEBAS: 13 HTML fuente y distribuidos cargan SDK, recursos y controles m�
  page.on('pageerror',error=>errors.push(error.message));
  try{
   for(const prefix of ['/examples/PRUEBAS/','/dist/examples/PRUEBAS/']){
-   await page.goto(origin+prefix+'index.html');assert.equal(await page.locator('ol a').count(),28);
+   await page.goto(origin+prefix+'index.html');assert.equal(await page.locator('ol a').count(),galleryCount);
    for(const name of recipes){
     await page.goto(origin+prefix+name);
     await page.waitForFunction(()=>typeof document.querySelector('webar-scene')?.start==='function');
@@ -153,7 +156,7 @@ test('Comparación SLAM: guía por textura, colocación manual y medidas en el i
 test('PRUEBA 27: modal, visor completo, calidad, foto, grabación con audio y guardado',{timeout:60000},async()=>{
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,acceptDownloads:true});
  try{
-  await virtualCamera(page,[frames[0]]);
+  await virtualCamera(page,[exampleMarker]);
   await page.goto(origin+'/dist/examples/PRUEBAS/27-pantalla-completa.html');
   await page.evaluate(()=>{
    const scene=document.querySelector('webar-scene');window.files=[];window.requests=[];window.micStops=0;

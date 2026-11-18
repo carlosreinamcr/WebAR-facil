@@ -6,11 +6,12 @@ jobs:
   core:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -23,10 +24,11 @@ jobs:
       - run: npm test
       - run: npm run check:package
   browsers:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -34,14 +36,22 @@ jobs:
       - run: npx playwright install --with-deps chrome webkit
       - run: npm run build
       - run: npm run docs:test-browser
+        timeout-minutes: 5
         env:
           PLAYWRIGHT_CHANNEL: chrome
-      - run: npm run test:browser
+      - name: Run browser tests
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          mkdir -p tests/generated
+          npm run test:browser 2>&1 | tee tests/generated/browser-tests.log
         env:
           TEST_WEBKIT: '1'
           PLAYWRIGHT_CHANNEL: chrome
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: browser-evidence
-          path: tests/generated/*.png
+          path: |
+            tests/generated/*.png
+            tests/generated/browser-tests.log

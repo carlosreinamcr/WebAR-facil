@@ -398,7 +398,7 @@ test('Herramienta móvil: discrepancia de build avisa sin bloquear cámara compa
     else Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getSupportedConstraints:()=>({}),getUserMedia:request}});
    });
    await page.goto(origin+'/dist/tools/device-tests.html');
-   const installed=await page.evaluate(()=>({expected:document.querySelector('meta[name="webar-sdk-build"]').content,actual:WebARFacil.LIBRARY_BUILD,script:document.querySelector('script[src*="standalone"]').src,text:document.querySelector('#sdk-info').textContent}));
+   const installed=await page.evaluate(()=>({expected:document.querySelector('meta[name="webar-sdk-build"]').content,actual:WebARFacil.LIBRARY_BUILD,script:document.querySelector('script[src*="webar-facil.min.js"]').src,text:document.querySelector('#sdk-info').textContent}));
    assert.match(installed.expected,/^[a-f0-9]{16}$/);assert.equal(installed.expected,installed.actual);assert.ok(installed.script.includes('build='+installed.actual));assert.ok(installed.text.includes(installed.actual));
    await page.route(/webar-facil\.min\.js(?:\?.*)?$/,route=>route.fulfill({contentType:'text/javascript',body:code+'\nglobalThis.WebARFacil={...globalThis.WebARFacil,LIBRARY_BUILD:"0000000000000000"};'}));
    await page.reload();await page.waitForFunction(()=>!document.querySelector('#sdk-notice').hidden);

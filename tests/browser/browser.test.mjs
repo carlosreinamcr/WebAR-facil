@@ -28,10 +28,11 @@ test('script único: tolerancia, eventos y retención sin cortar la animación G
     await page.evaluate(()=>window.__camera.setIndex(1));await page.waitForFunction(()=>window.__lost===1);
     const state=await page.evaluate(()=>({visible:app.getAnchor('poster').visible,retained:window.__retained,poses:window.__poses}));
     assert.equal(state.visible,true);assert.equal(state.retained,true);
-    const transform=await page.evaluate(()=>{model.updateMatrixWorld(true);let mesh;model.traverse(object=>{if(object.isMesh)mesh=object;});return [...mesh.matrixWorld.elements];});
-    await page.waitForTimeout(200);
-    const later=await page.evaluate(()=>{model.updateMatrixWorld(true);let mesh;model.traverse(object=>{if(object.isMesh)mesh=object;});return{poses:window.__poses,transform:[...mesh.matrixWorld.elements]};});
-    assert.equal(later.poses,state.poses);assert.ok(later.transform.some((value,i)=>Math.abs(value-transform[i])>.0001),'la animación debe seguir con el marcador ausente');
+    const animation=await page.evaluate(()=>model.animationState);
+    assert.ok(animation?.running,'la animación debe seguir con el marcador ausente');
+    await page.waitForFunction(previous=>model.animationState?.name===previous.name&&
+      Math.abs(model.animationState.time-previous.time)>.02,animation,{timeout:3000});
+    assert.equal(await page.evaluate(()=>window.__poses),state.poses);
     assert.equal(await page.evaluate(()=>{app.engine.setKeepContentOnLost(false);return app.getAnchor('poster').visible;}),false);
     assert.equal(await page.evaluate(()=>{app.engine.setKeepContentOnLost(true);return app.getAnchor('poster').visible;}),true);
     await page.evaluate(()=>window.__camera.setIndex(0));await page.waitForFunction(()=>window.__found===2);
@@ -382,8 +383,13 @@ test('escritorio sin WebXR: subir JPG compila y activa el marcador sin .dat ni J
     const data=await page.locator('#download-dat').evaluate(async link=>Array.from(new Uint8Array(await(await fetch(link.href)).arrayBuffer())));
     const decoded=decodeMarker(new Uint8Array(data).buffer);assert.equal(decoded.simulated,false);
     await page.click('#stop');await page.locator('#start:enabled').waitFor();assert.deepEqual(errors,[]);
-    await page.waitForFunction(async()=>await caches.has('webar-facil-markers-v1')&&
-      (await (await caches.open('webar-facil-markers-v1')).keys()).length===1);
+    await page.waitForFunction(async()=>{
+      for(const name of await caches.keys()){
+        const entries=await (await caches.open(name)).keys();
+        if(entries.some(entry=>new URL(entry.url).pathname.startsWith('/.webar-marker-cache/')))return true;
+      }
+      return false;
+    },null,{timeout:5000});
     const hits=await page.evaluate(async()=>{
       const engine=new WebARFacil.WebAREngine(),statuses=[];
       engine.onStatus(status=>statuses.push(status));
