@@ -44,9 +44,8 @@ export async function prepareExampleMarkerFrame(){
 
 export async function virtualCamera(page,frames,{width=640,height=480}={}){
   await page.addInitScript(({frames,width,height})=>{
-    const support=navigator.mediaDevices.getSupportedConstraints.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getSupportedConstraints=()=>({...support(),facingMode:true});
-    navigator.mediaDevices.getUserMedia=async constraints=>{
+    const support=navigator.mediaDevices?.getSupportedConstraints?.bind(navigator.mediaDevices);
+    const request=async constraints=>{
       if(constraints.video.facingMode?.exact)throw new Error('Webcam must not require a rear camera.');
       const images=await Promise.all(frames.map(src=>new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=reject;image.src=src;})));
       const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const context=canvas.getContext('2d');
@@ -63,5 +62,10 @@ export async function virtualCamera(page,frames,{width=640,height=480}={}){
       window.__camera={move:()=>{moving=true;},freeze:()=>{moving=false;},setIndex:value=>{index=value;draw();},canvas,stream};
       return stream;
     };
+    Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{
+      getSupportedConstraints:()=>({...support?.(),facingMode:true}),
+      getUserMedia:request,
+    }});
+    window.__mockGetUserMedia=request;
   },{frames,width,height});
 }

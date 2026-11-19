@@ -307,10 +307,15 @@ test('Herramienta móvil: Android/Chrome e iOS/WebKit emulados exportan diagnós
         }
       });
       if(syntheticCamera)await virtualCamera(page,[frames[0]]);
-      else await page.addInitScript(()=>{if(navigator.mediaDevices)navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('Synthetic camera unavailable in this test environment','NotSupportedError');};});
+      else await page.addInitScript(()=>{
+        const request=async()=>{throw new DOMException('Synthetic camera unavailable in this test environment','NotSupportedError');};
+        Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getSupportedConstraints:()=>({}),getUserMedia:request}});
+        window.__mockGetUserMedia=request;
+      });
       await page.reload();
       await page.selectOption('#platform',variant.platform);await page.fill('#device','Emulated '+variant.platform);await page.fill('#os','Automated fixture');await page.fill('#browser','Playwright');
       await page.waitForFunction(()=>document.querySelector('#sdk-info').textContent.startsWith('SDK '));
+      assert.equal(await page.evaluate(()=>navigator.mediaDevices?.getUserMedia===window.__mockGetUserMedia&&typeof window.__mockGetUserMedia==='function'),true,'La cámara de prueba debe estar instalada');
       await page.getByRole('button',{name:'Iniciar cámara',exact:true}).tap();
       if(syntheticCamera)await waitForDeviceTest(page,variant.platform,()=>document.querySelector('webar-scene').getDiagnosticsReport()?.poses.count>0);
       else{await page.waitForFunction(()=>document.querySelector('webar-scene').getDiagnosticsReport()?.recording===false);console.log(`${variant.platform}: camera API/capture unavailable in this automated environment; verified error report, not camera tracking.`);}
@@ -418,6 +423,7 @@ async function waitForDeviceTest(page,platform,condition){
       const scene=document.querySelector('webar-scene'),report=scene.getDiagnosticsReport();
       return {message:document.querySelector('#message').textContent,sceneStatus:scene.textContent.trim().slice(0,250),cameraRequests:window.__permissionRequests,recording:report?.recording,poses:report?.poses.count,frames:report?.tracking?.frames};
     });
+    console.error(`${platform}: ${JSON.stringify(state)}`);
     throw new Error(`${platform}: ${JSON.stringify(state)}`,{cause:error});
   }
 }
